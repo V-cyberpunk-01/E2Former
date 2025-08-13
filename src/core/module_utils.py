@@ -21,7 +21,7 @@ from torch import nn
 from torch_cluster import radius_graph
 from torch_geometric.data import Data
 
-from .tensor_product import Simple_TensorProduct
+# Avoid circular import - Simple_TensorProduct imported lazily where needed
 
 # from fairchem.core.models.escn.so3 import SO3_Grid
 
@@ -2687,6 +2687,7 @@ class TensorProductRescale(torch.nn.Module):
         # e3nn.__version__ == 0.4.4
         # Use `path_normalization` == 'none' to remove normalization factor
         if mode == "simple":
+            from ..layers.tensor_product import Simple_TensorProduct
             self.tp = Simple_TensorProduct(
                 irreps_in1=self.irreps_in1,
                 irreps_in2=self.irreps_in2,

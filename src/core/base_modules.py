@@ -31,7 +31,7 @@ from .module_utils import (
     GaussianRadialBasisLayer,
     SO3_Linear_e2former,
 )
-from .wigner6j.tensor_product import Simple_TensorProduct_oTchannel
+from ..layers.tensor_product import Simple_TensorProduct_oTchannel
 
 
 # ============================================================================
@@ -250,7 +250,7 @@ def create_trans_block(
     Returns:
         Configured TransBlock instance
     """
-    from .blocks import TransBlock  # Import here to avoid circular dependency
+    from ..layers.blocks import TransBlock  # Import here to avoid circular dependency
     
     # Apply last layer logic
     if is_last_layer:

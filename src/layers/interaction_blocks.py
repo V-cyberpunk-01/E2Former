@@ -9,8 +9,8 @@ import torch
 from torch import nn
 from e3nn import o3
 
-from .module_utils import SO3_Linear_e2former
-from .wigner6j.tensor_product import Simple_TensorProduct_oTchannel
+from ..core.module_utils import SO3_Linear_e2former
+from ..wigner6j.tensor_product import Simple_TensorProduct_oTchannel
 from .maceblocks import EquivariantProductBasisBlock, reshape_irrepstoe3nn
 
 

@@ -24,7 +24,7 @@ from fairchem.core.models.gemnet.layers.radial_basis import RadialBasis
 
 # Local imports
 from .maceblocks import EquivariantProductBasisBlock, reshape_irrepstoe3nn
-from .module_utils import (
+from ..core.module_utils import (
     DropPath_BL,
     EquivariantDropout,
     FeedForwardNetwork_escn,
@@ -37,7 +37,7 @@ from .module_utils import (
     polynomial,
 )
 from .so2 import _init_edge_rot_mat
-from .wigner6j.tensor_product import (
+from ..wigner6j.tensor_product import (
     E2TensorProductArbitraryOrder,
     Simple_TensorProduct_oTchannel,
 )
@@ -381,7 +381,7 @@ class TransBlock(torch.nn.Module):
 
         if isinstance(attn_type, str) and attn_type.endswith("order"):
             # Import here to avoid circular dependency
-            from .e2former import E2AttentionArbOrder_sparse
+            from .attention import E2AttentionArbOrder_sparse
             func = E2AttentionArbOrder_sparse
 
         elif isinstance(attn_type, str) and attn_type.startswith("escn"):

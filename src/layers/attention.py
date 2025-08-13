@@ -14,7 +14,7 @@ from e3nn import o3
 from torch import nn
 
 # Import required modules
-from .module_utils import (
+from ..core.module_utils import (
     RadialFunction,
     SmoothLeakyReLU,
     Learn_PolynomialDistance,
@@ -22,7 +22,7 @@ from .module_utils import (
     SO3_Linear2Scalar_e2former,
     get_normalization_layer,
 )
-from .wigner6j.tensor_product import E2TensorProductArbitraryOrder
+from ..wigner6j.tensor_product import E2TensorProductArbitraryOrder
 
 # Constants
 DEFAULT_ATOM_TYPE_COUNT = 256

@@ -10,15 +10,18 @@ from e3nn import o3
 from torch_geometric.data import Data
 
 
-from .dit import E2DiTBlock,TransformerBlock
-from .e2former import E2former, no_weight_decay, construct_radius_neighbor,E2formerCluster
-from .E2Former_configs import E2FormerConfigs
-from .module_utils import CellExpander,GaussianLayer_Edgetype,polynomial
+from ..layers.dit import E2DiTBlock,TransformerBlock
+from .e2former_main import E2former
+from ..core.base_modules import no_weight_decay
+from ..layers.blocks import construct_radius_neighbor
+from .e2former_cluster import E2formerCluster
+from ..configs.E2Former_configs import E2FormerConfigs
+from ..core.module_utils import CellExpander,GaussianLayer_Edgetype,polynomial
 
 
-from .utils.graph_utils import compilable_scatter, unpad_results,RandomRotate
-from .utils.nn_utils import init_linear_weights
-from .utils.base_utils import registry,init_configs
+from ..utils.graph_utils import compilable_scatter, unpad_results,RandomRotate
+from ..utils.nn_utils import init_linear_weights
+from ..utils.base_utils import registry,init_configs
 
 
 _AVG_NUM_NODES = 77.81317

@@ -6,8 +6,8 @@ from typing import Dict, List, Optional, Tuple
 import torch
 from torch import Tensor, nn
 from torch.nn.attention import SDPBackend, sdpa_kernel
-from .module_utils import CellExpander,GaussianLayer_Edgetype,polynomial
-from .e2former import construct_radius_neighbor
+from ..core.module_utils import CellExpander,GaussianLayer_Edgetype,polynomial
+from .blocks import construct_radius_neighbor
 
 
 def modulate(x, shift, scale):

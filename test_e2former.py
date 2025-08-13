@@ -14,7 +14,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import the E2Former wrapper
-from src.E2Former_wrapper import E2FormerBackbone
+from src.models.E2Former_wrapper import E2FormerBackbone
 
 def create_proper_batch_data(batch_size=2, max_atoms_per_mol=10, device='cpu'):
     """

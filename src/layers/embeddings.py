@@ -21,7 +21,7 @@ import e3nn
 from fairchem.core.models.escn.so3 import SO3_Embedding, SO3_Rotation
 
 # Local imports
-from .module_utils import (
+from ..core.module_utils import (
     Electron_Density_Descriptor,
     RadialProfile,
     RadialFunction,
