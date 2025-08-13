@@ -251,23 +251,15 @@ The attention mechanism has been refactored into a modular system for better mai
 If you find E2Former useful in your research, please consider citing:
 
 ```bibtex
-@article{e2former2025,
-  title={E2Former: Efficient Equivariant Attention for Neural Network Potentials},
-  author={Liu, Yusong and Wang, Shaoning and Wang, Mingyu and Dral, Pavlo O.},
+@article{li2025e2former,
+  title={E2Former: A Linear-time Efficient and Equivariant Transformer for Scalable Molecular Modeling},
+  author={Li, Yunyang and Huang, Lin and Ding, Zhihao and Wang, Chu and Wei, Xinran and Yang, Han and Wang, Zun and Liu, Chang and Shi, Yu and Jin, Peiran and others},
   journal={arXiv preprint arXiv:2501.19216},
   year={2025}
 }
 ```
 
-For the theoretical foundation and Wigner 6j convolution details:
-```bibtex
-@article{wigner6j2025,
-  title={Wigner 6j Convolution: Efficient Tensor Products for E(3)-Equivariant Networks},
-  author={Liu, Yusong and Wang, Shaoning and Wang, Mingyu and Dral, Pavlo O.},
-  journal={arXiv preprint arXiv:2501.19216},
-  year={2025}
-}
-```
+
 
 ## License
 
