@@ -381,7 +381,7 @@ class TransBlock(torch.nn.Module):
 
         if isinstance(attn_type, str) and attn_type.endswith("order"):
             # Import here to avoid circular dependency
-            from .attention import E2AttentionArbOrder_sparse
+            from .attention.sparse import E2AttentionArbOrder_sparse
             func = E2AttentionArbOrder_sparse
 
         elif isinstance(attn_type, str) and attn_type.startswith("escn"):
