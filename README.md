@@ -1,4 +1,4 @@
-# E2Former: Equivariant Attention Interatomic Potential
+# E2Former:  A Linear-time Efficient and Equivariant Transformer for Scalable Molecular Modeling
 
 This repository contains the official implementation of E2Former, an equivariant neural network interatomic potential based on efficient attention mechanisms and E(3)-equivariant operations.
 
