@@ -26,7 +26,7 @@ from submitit.helpers import Checkpointable, DelayedSubmission
 from torch.distributed.elastic.utils.distributed import get_free_port
 from torch.distributed.launcher.api import LaunchConfig, elastic_launch
 from torch.utils.data import BatchSampler, Dataset, DistributedSampler
-from typing_extensions import deprecated, override
+from typing_extensions import override
 
 if TYPE_CHECKING:
     import argparse
@@ -62,17 +62,13 @@ from fairchem.core.trainers.ocp_trainer import OCPTrainer
 
 import wandb  # isort:skip
 
-try:
-    sys.path.append("../")
-    sys.path.append("/home/hul/hul/yl2428/SFM_framework_Dec-9/")
-except:
-    print("Error: Failed to append the relative SFM path to the parent directory.")
+# Add parent directory to path for imports
+sys.path.append("../")
 
 import ase
 from fairchem.core.datasets.base_dataset import BaseDataset
 
 # set the cuda home
-from fairchem.core.datasets.oc22_lmdb_dataset import OC22LmdbDataset
 from fairchem.core.modules.transforms import DataTransforms
 from torch.nn.parallel.distributed import DistributedDataParallel
 from torch_geometric.data import Data

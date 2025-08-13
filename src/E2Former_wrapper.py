@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-# Ensure E2formerESCAIP is properly imported or define
-# from molfm.models.psm.psmmodel import *
 from contextlib import nullcontext
 from functools import partial
 
@@ -10,14 +8,6 @@ import torch_geometric
 from e3nn import o3
 
 from torch_geometric.data import Data
-# from fairchem.core.common.registry import registry
-# from fairchem.core.common.transforms import RandomRotate
-# from fairchem.core.common.utils import conditional_grad
-# from fairchem.core.datasets import data_list_collater
-# from fairchem.core.models.base import GraphModelMixin, HeadInterface
-# from fairchem.core.models.scn.sampling import CalcSpherePoints
-# from sklearn.cluster import KMeans
-# from .custom_types import GraphAttentionData
 
 
 from .dit import E2DiTBlock,TransformerBlock
@@ -184,7 +174,7 @@ class E2FormerBackbone(nn.Module):
         # self.boo_embedding = nn.Embedding(256 + 300, cfg.encoder_embed_dim)
         # self.boo_embedding_linear = nn.Linear(cfg.encoder_embed_dim, 128)
 
-        print("master config: ", cfg)
+        # Configuration loaded successfully
 
         self.uniform_center_count = 5
         self.sph_grid_channel = 8
@@ -204,7 +194,7 @@ class E2FormerBackbone(nn.Module):
         self.invariant_encoder = None
         if cfg.encoder == "dit":
 
-            print("dit use config like follows: \n", cfg.dit_config,{"embed":cfg.encoder_embed_dim,})
+            # DIT encoder layers initialized with config
             self.invariant_encoder = E2DiTBlock(
                     embedding_dim=cfg.encoder_embed_dim, 
                     radius_cut_off = self.kwargs.get("pbc_max_radius",5.),
@@ -213,7 +203,7 @@ class E2FormerBackbone(nn.Module):
                     **vars(cfg.dit_config)
                 )
         elif cfg.encoder == "transformer":
-            print("transformer use config like follows: \n", cfg.dit_config,{"embed":cfg.encoder_embed_dim,})
+            # Transformer encoder layers initialized with config
             self.invariant_encoder = TransformerBlock(
                     embedding_dim=cfg.encoder_embed_dim, 
                     radius_cut_off = self.kwargs.get("pbc_max_radius",5.),
