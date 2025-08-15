@@ -12,14 +12,7 @@ model:
 
   backbone:
     model: src.E2Former.E2FormerBackbone
-    encoder: "default" # or dit
-
-    # dit_config
-    encoder_embed_dim: 1024
-    ffn_embedding_dim: 1536
-    num_attention_heads: 32
-    dropout: 0.1
-    num_encoder_layers: 12
+    # E2Former configuration (no encoder)
 
 
     # global_cfg:

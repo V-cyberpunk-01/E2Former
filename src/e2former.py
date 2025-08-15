@@ -15,8 +15,6 @@ The codebase has been reorganized into:
 # Models
 from .models import (
     E2former,
-    E2formerCluster,
-    E2AttentionArbOrder_sparse_forcluster,
     E2FormerBackbone,
 )
 
@@ -92,35 +90,12 @@ from torch_scatter import scatter_mean
 
 # FairChem imports
 from fairchem.core.models.equiformer_v2.so3 import SO3_LinearV2
-from fairchem.core.models.escn.escn import SO2Block
-from fairchem.core.models.escn.so3 import SO3_Embedding, SO3_Rotation
-from fairchem.core.models.gemnet.layers.radial_basis import RadialBasis
 
-# Import remaining module utilities
-from .core.module_utils import (
-    DropPath_BL,
-    Electron_Density_Descriptor,
-    EquivariantDropout,
-    EquivariantLayerNormArraySphericalHarmonics,
-    EquivariantRMSNormArraySphericalHarmonics,
-    EquivariantRMSNormArraySphericalHarmonicsV2,
-    EquivariantRMSNormArraySphericalHarmonicsV2_BL,
-    FeedForwardNetwork_escn,
-    GaussianLayer_Edgetype,
-    Learn_PolynomialDistance,
-    RadialFunction,
-    RadialProfile,
-    SO3_Grid,
-    polynomial,
-)
+# Module utilities are imported in their respective modules
 
-from .layers.so2 import _init_edge_rot_mat
-from .wigner6j.tensor_product import (
-    E2TensorProductArbitraryOrder,
-    Simple_TensorProduct_oTchannel,
-)
+# Tensor product operations are imported in attention modules
 
-from .layers.maceblocks import EquivariantProductBasisBlock, reshape_irrepstoe3nn
+# MACE blocks are imported in their respective modules
 
 # Helper function
 def get_powers(vec, coeffs, lmax):
@@ -132,10 +107,8 @@ def get_powers(vec, coeffs, lmax):
 __all__ = [
     # Main classes
     "E2former",
-    "E2formerCluster",
     # Attention
     "E2AttentionArbOrder_sparse",
-    "E2AttentionArbOrder_sparse_forcluster",
     # Embeddings
     "EdgeDegreeEmbeddingNetwork_higherorder",
     "EdgeDegreeEmbeddingNetwork_higherorder_v3",

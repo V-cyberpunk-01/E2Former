@@ -22,7 +22,6 @@ from .interaction_blocks import (
     Body2_interaction,
     Body3_interaction_MACE,
 )
-from .dit import E2DiTBlock, TransformerBlock
 
 # Note: attention module imports are handled directly where needed to avoid circular dependencies
 
@@ -41,7 +40,5 @@ __all__ = [
     "Body2_interaction",
     "Body3_interaction_MACE",
     # Others
-    "E2DiTBlock",
-    "TransformerBlock",
     "construct_radius_neighbor",
 ]

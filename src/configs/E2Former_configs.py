@@ -129,14 +129,6 @@ class PSMConfig:
 
 
 @dataclass
-class DitConfig:
-    ffn_embedding_dim: int
-    num_attention_heads: int
-    dropout: float
-    num_encoder_layers: int
-
-
-@dataclass
 class E2FormerBackboneConfigs:
     irreps_node_embedding: str
     num_layers: int
@@ -165,20 +157,14 @@ class E2FormerBackboneConfigs:
     sparse_attn: bool
     dynamic_sparse_attn_threthod: int
     force_head: Any
-    cluster_ckpt_path: str
-    with_cluster: bool
 
 
 @dataclass
 class E2FormerConfigs:
-    # Additional fields used by PSMMixEmbedding
-    encoder: str
-    encoder_embed_dim: int
-
+    # E2Former configuration without encoder
     global_cfg: GlobalConfigs
     # molecular_graph_cfg: MolecularGraphConfigs
     # gnn_cfg: GraphNeuralNetworksConfigs
     # reg_cfg: RegularizationConfigs
     psm_config: PSMConfig
-    dit_config: DitConfig
     backbone_config: E2FormerBackboneConfigs

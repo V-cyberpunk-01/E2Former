@@ -97,15 +97,7 @@ def test_e2former():
         # Global configuration
         'regress_forces': False,
         
-        # Encoder configuration
-        'encoder': 'dit',
-        'encoder_embed_dim': 128,
-        
-        # DIT encoder configuration
-        'ffn_embedding_dim': 256,
-        'num_attention_heads': 8,
-        'dropout': 0.0,
-        'num_encoder_layers': 2,
+        # E2Former configuration (no encoder)
         
         # PBC and radius configuration
         'pbc_max_radius': 6.0,
@@ -139,8 +131,6 @@ def test_e2former():
         'sparse_attn': False,
         'dynamic_sparse_attn_threthod': 1000,
         'force_head': None,
-        'cluster_ckpt_path': '',
-        'with_cluster': False,
         
         # Important: disable torch.compile to avoid the compilation issues
         'use_compile': False,

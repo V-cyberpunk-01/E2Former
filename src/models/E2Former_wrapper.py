@@ -10,11 +10,9 @@ from e3nn import o3
 from torch_geometric.data import Data
 
 
-from ..layers.dit import E2DiTBlock,TransformerBlock
 from .e2former_main import E2former
 from ..core.base_modules import no_weight_decay
 from ..layers.blocks import construct_radius_neighbor
-from .e2former_cluster import E2formerCluster
 from ..configs.E2Former_configs import E2FormerConfigs
 from ..core.module_utils import CellExpander,GaussianLayer_Edgetype,polynomial
 
@@ -169,13 +167,13 @@ class E2FormerBackbone(nn.Module):
             self.kwargs.get("pbc_max_radius",5.),
         )
 
-        # Token embedding layer
-        self.embedding = nn.Embedding(256, cfg.encoder_embed_dim)
-        self.embedding_charge = nn.Embedding(30, cfg.encoder_embed_dim)
-        self.embedding_multiplicity = nn.Embedding(30, cfg.encoder_embed_dim)
-
-        # self.boo_embedding = nn.Embedding(256 + 300, cfg.encoder_embed_dim)
-        # self.boo_embedding_linear = nn.Linear(cfg.encoder_embed_dim, 128)
+        # Get decoder embedding dimension from backbone config
+        self.fea_dim = o3.Irreps(cfg.backbone_config.irreps_node_embedding)[0][0]
+        
+        # Token embedding layer matching decoder input dimension
+        self.embedding = nn.Embedding(256, self.fea_dim)
+        self.embedding_charge = nn.Embedding(30, self.fea_dim)
+        self.embedding_multiplicity = nn.Embedding(30, self.fea_dim)
 
         # Configuration loaded successfully
 
@@ -191,49 +189,16 @@ class E2FormerBackbone(nn.Module):
         #     num_sphere_points=16,
         #     channel=self.sph_grid_channel,
         #     lmax=2,
-        #     output_channel=cfg.encoder_embed_dim,
+        #     output_channel=self.fea_dim,
         # )
 
-        self.invariant_encoder = None
-        if cfg.encoder == "dit":
-
-            # DIT encoder layers initialized with config
-            self.invariant_encoder = E2DiTBlock(
-                    embedding_dim=cfg.encoder_embed_dim, 
-                    radius_cut_off = self.kwargs.get("pbc_max_radius",5.),
-                    max_neighbors = self.kwargs.get("max_neighbors",32),
-                    num_layers = cfg.dit_config.num_encoder_layers,
-                    **vars(cfg.dit_config)
-                )
-        elif cfg.encoder == "transformer":
-            # Transformer encoder layers initialized with config
-            self.invariant_encoder = TransformerBlock(
-                    embedding_dim=cfg.encoder_embed_dim, 
-                    radius_cut_off = self.kwargs.get("pbc_max_radius",5.),
-                    max_neighbors = self.kwargs.get("max_neighbors",32),
-                    num_layers = cfg.dit_config.num_encoder_layers,
-                    **vars(cfg.dit_config))
+        # No encoder - using E2Former as the main model
 
 
-        self.embed_proj = torch.nn.Sequential(
-            nn.Linear(
-                cfg.encoder_embed_dim,
-                o3.Irreps(cfg.backbone_config.irreps_node_embedding)[0][0],
-            ),
-            nn.SiLU(),
-            nn.LayerNorm(
-                o3.Irreps(cfg.backbone_config.irreps_node_embedding)[0][0], eps=1e-6
-            ),
-        )
-
-        self.fea_dim = o3.Irreps(cfg.backbone_config.irreps_node_embedding)[0][0]
-        # Decoder selection and initialization
+        # Direct use without encoder projection
+        # Initialize E2Former decoder
         print("e2former use config like follows: \n", cfg.backbone_config)
-        
-        if cfg.backbone_config.with_cluster:
-            self.decoder = E2formerCluster(**vars(cfg.backbone_config))
-        else:
-            self.decoder = E2former(**vars(cfg.backbone_config))
+        self.decoder = E2former(**vars(cfg.backbone_config))
         # Enable high precision matrix multiplication if not using fp16
         if not self.global_cfg.use_fp16_backbone:
             torch.set_float32_matmul_precision("high")
@@ -350,19 +315,7 @@ class E2FormerBackbone(nn.Module):
                 self.embedding_charge(torch.clip(batched_data["charge"],-10,10)+10) + \
                     self.embedding_multiplicity(torch.clip(batched_data["multiplicity"],0,20))
 
-            if self.invariant_encoder is not None:
-                token_embedding = self.invariant_encoder(
-                    token_embedding, # keep update
-                    token_embedding.clone(),  # condition
-                    pos,
-                    atomic_numbers,
-                    padding_mask,
-                    batched_data,
-                    pbc_expand_batched=pbc_expand_batched,
-                )
-                # print("layer: ",j,torch.mean(attn),torch.min(attn),torch.max(attn))
-                # node_vec_features = node_vec_features * (node_embedding_ef.unsqueeze(dim = -2))
-            token_embedding = self.embed_proj(token_embedding)
+            # No encoder processing - directly use token embedding for decoder
 
             # Forward through decoder
             (

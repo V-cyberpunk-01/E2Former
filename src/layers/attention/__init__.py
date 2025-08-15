@@ -37,7 +37,6 @@ from .orders import (
 
 # Import main attention mechanisms
 from .sparse import E2AttentionArbOrder_sparse
-from .cluster import E2AttentionArbOrder_sparse_forcluster
 
 # Re-export for backward compatibility
 from ...wigner6j.tensor_product import E2TensorProductArbitraryOrder
@@ -65,7 +64,6 @@ __all__ = [
     "create_attention_order",
     # Main attention classes
     "E2AttentionArbOrder_sparse",
-    "E2AttentionArbOrder_sparse_forcluster",
     # Tensor product
     "E2TensorProductArbitraryOrder",
 ]

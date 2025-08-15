@@ -2,7 +2,7 @@
 E2Former Source Code
 
 Organized structure:
-- models/: Main model implementations (E2former, E2formerCluster, E2FormerBackbone)
+- models/: Main model implementations (E2former, E2FormerBackbone)
 - layers/: Neural network layers (attention, embeddings, blocks, interactions)
 - core/: Base classes and utilities (base_modules, module_utils, e2former_utils)
 - configs/: Configuration classes
@@ -11,13 +11,12 @@ Organized structure:
 """
 
 # Main model imports
-from .models import E2former, E2formerCluster, E2FormerBackbone
+from .models import E2former, E2FormerBackbone
 
 # For backward compatibility
 from .e2former import *
 
 __all__ = [
     "E2former",
-    "E2formerCluster",
     "E2FormerBackbone",
 ]
