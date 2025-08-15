@@ -32,6 +32,7 @@ from ...wigner6j.tensor_product import (
     E2TensorProductArbitraryOrder,
     Simple_TensorProduct_oTchannel,
 )
+from .coefficient_mapping import CoefficientMapping
 
 # Constants
 DEFAULT_ATOM_TYPE_COUNT = 256

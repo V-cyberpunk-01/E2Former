@@ -49,6 +49,7 @@ import numpy as np
 import torch
 from e3nn import o3
 from e3nn.util.jit import compile_mode
+import cue
 ###########################################################################################
 # Higher Order Real Clebsch Gordan (based on e3nn by Mario Geiger)
 # Authors: Ilyes Batatia
