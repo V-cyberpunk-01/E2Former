@@ -49,7 +49,21 @@ import numpy as np
 import torch
 from e3nn import o3
 from e3nn.util.jit import compile_mode
-import cue
+
+try:
+    import cuequivariance as cue
+    from cuequivariance import O3_e3nn
+    CUET_AVAILABLE = True
+except ImportError:
+    import warnings
+    warnings.warn(
+        "cuequivariance not available. MACE blocks will use standard e3nn operations. "
+        "Install cuequivariance for potential performance improvements.",
+        UserWarning
+    )
+    CUET_AVAILABLE = False
+
+
 ###########################################################################################
 # Higher Order Real Clebsch Gordan (based on e3nn by Mario Geiger)
 # Authors: Ilyes Batatia

@@ -11,8 +11,8 @@ from fairchem.core.models.equiformer_v2.so3 import SO3_LinearV2
 from fairchem.core.models.escn.so3 import SO3_Embedding
 
 from .spherical_harmonics import SO3_Grid, SO3_Linear_e2former
-from .activation import GateActivation, S2Activation, SeparableS2Activation
-from .misc import Gate_s3
+from fairchem.core.models.equiformer_v2.activation import  GateActivation, S2Activation, SeparableS2Activation
+from .activation import Gate_s3
 
 @compile_mode("script")
 class FeedForwardNetwork_s3(torch.nn.Module):
