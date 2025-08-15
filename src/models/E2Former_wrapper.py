@@ -179,22 +179,6 @@ class E2FormerBackbone(nn.Module):
 
         self.uniform_center_count = 5
         self.sph_grid_channel = 8
-        # self.linear_sigmaco = torch.nn.Sequential(
-        #     nn.Linear(128 + 128 + 128, 128),
-        #     nn.GELU(),
-        #     nn.Linear(128, 2 * self.uniform_center_count * self.sph_grid_channel),
-        # )
-        # self.electron_density = Electron_Density_Descriptor(
-        #     uniform_center_count=self.uniform_center_count,
-        #     num_sphere_points=16,
-        #     channel=self.sph_grid_channel,
-        #     lmax=2,
-        #     output_channel=self.fea_dim,
-        # )
-
-        # No encoder - using E2Former as the main model
-
-
         # Direct use without encoder projection
         # Initialize E2Former decoder
         print("e2former use config like follows: \n", cfg.backbone_config)
@@ -214,25 +198,7 @@ class E2FormerBackbone(nn.Module):
             else self.compiled_forward
         )
 
-    def BOO_feature(self, pos, expand_pos, local_attention_weight):
-        B, N1 = pos.shape[:2]
-        expand_pos.shape[1]
-        dist = torch.norm(pos.unsqueeze(dim=2) - expand_pos.unsqueeze(dim=1), dim=-1)
-        edge_vec = (pos.unsqueeze(dim=2) - expand_pos.unsqueeze(dim=1)) / (
-            dist.unsqueeze(dim=-1) + 1e-5
-        )
-        angel = torch.sum(
-            edge_vec * (local_attention_weight.unsqueeze(dim=-1) > 1e-6), dim=2
-        )
-        # print('before norm',angel[0],torch.sum(local_attention_weight>1e-6,dim =2)[0])
-        # angel = 2*angel/(torch.sum(local_attention_weight>1e-6,dim =2).unsqueeze(dim = -1))
-        # angel = angel
-        angel = torch.sum(angel**2, dim=-1) - torch.sum(
-            local_attention_weight > 1e-6, dim=2
-        ).unsqueeze(dim=-1)
-        # angel = self.boo_embedding(torch.sum(local_attention_weight>1e-6,dim =2))
-        # print('after norm',angel[0],torch.max(angel),torch.min(angel))
-        return angel
+
 
     def compiled_forward(
         self,
@@ -292,25 +258,6 @@ class E2FormerBackbone(nn.Module):
             else:
                 pbc_expand_batched = None
 
-
-            # boo_fea = self.BOO_feature(pos,expand_pos,local_attention_weight)
-            # token_embedding_tgt = self.embedding_tgt(token_id)
-            # token_embedding_src = self.embedding_src(torch.gather(token_id,dim = 1,index = outcell_index))
-            # dist_rbf = self.dit_gbf(dist,batched_data["node_type_edge"])
-            # sigma,co = torch.chunk(self.linear_sigmaco(torch.cat([
-            #                 token_embedding_src.unsqueeze(dim = 1).repeat(1,tgt_len,1,1),
-            #                 token_embedding_tgt.unsqueeze(dim = 2).repeat(1,1,src_len,1),
-            #                 dist_rbf],dim = -1
-            #                 )),dim = -1,chunks=2)
-
-            # token_embedding = self.electron_density(
-            #     pos,
-            #     rji = -pos.unsqueeze(dim = 2)+pbc_expand_batched["expand_pos"].unsqueeze(dim = 1),
-            #     sigma = sigma,
-            #     co = co,
-            #     neighbor_mask = local_attention_weight>1e-5)
-            # token_embedding[:,:,0] = token_embedding[:,:,0] + self.embedding(token_id)
-            # print(atomic_numbers.shape,batched_data["multiplicity"].squeeze(dim = -1).shape)
             token_embedding = self.embedding(atomic_numbers) + \
                 self.embedding_charge(torch.clip(batched_data["charge"],-10,10)+10) + \
                     self.embedding_multiplicity(torch.clip(batched_data["multiplicity"],0,20))

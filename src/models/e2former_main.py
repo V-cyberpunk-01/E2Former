@@ -1,8 +1,25 @@
 # -*- coding: utf-8 -*-
 """
-E2Former Main Model Implementation
+E2Former main model implementation.
 
-This file contains the main E2former class for molecular property prediction.
+This module defines the `E2former` class, an E(3)-equivariant transformer for
+atomistic graph modeling. It combines attention mechanisms with spherical
+harmonics-based tensor products to predict molecular properties while
+maintaining rotational and translational equivariance. The model supports
+periodic boundary conditions (PBC) and non-PBC systems.
+
+Highlights:
+- Equivariant message passing using spherical harmonics up to configurable order
+  `lmax` inferred from `irreps_node_embedding`.
+- Flexible radial basis options: Gaussian smearing, Gaussian RBF, or Bessel.
+- Edge-degree embeddings that incorporate distance, direction, and local degree.
+- Optional decoupling of energy and force heads.
+
+Usage sketch:
+    - Prepare `batched_data` with keys described in `E2former.forward`.
+    - Optionally provide `token_embedding` per-atom; otherwise a learnable atom
+      type embedding is used.
+    - Call the model to obtain per-atom scalar features and equivariant vectors.
 
 Author: E2Former Team
 License: MIT
@@ -43,15 +60,20 @@ DEFAULT_ATOM_TYPE_COUNT = 256
 
 
 def get_powers(vec, coeffs, lmax):
-    """Compute spherical harmonics powers for given vector.
-    
+    """Compute spherical harmonics powers for an input vector field.
+
     Args:
-        vec: Input vector tensor
-        coeffs: Coefficients from E2TensorProductArbitraryOrder.get_coeffs()
-        lmax: Maximum l order
-        
+        vec: Tensor of shape [..., 3] representing Cartesian vectors.
+        coeffs: Sequence of scale coefficients as returned by
+            `E2TensorProductArbitraryOrder.get_coeffs()`; length must be
+            `lmax + 1`.
+        lmax: Maximum spherical harmonics order to compute (non-negative int).
+
     Returns:
-        List of computed powers for each l order
+        List[Tensor]: A list of tensors of length `lmax + 1` where the element
+        at index `l` has shape [..., (2l+1), 1] and contains the spherical
+        harmonics Y_lm (scaled by the corresponding `coeffs[l]`). The first
+        element (l=0) is a constant term with shape [..., 1, 1].
     """
     out_powers = [
         coeffs[0] * torch.ones_like(vec.narrow(-1, 0, 1).unsqueeze(dim=-1))
@@ -69,20 +91,61 @@ def get_powers(vec, coeffs, lmax):
 
 
 class E2former(torch.nn.Module):
-    """E2Former: Equivariant Transformer for molecular property prediction.
-    
-    An E(3)-equivariant graph neural network that combines attention mechanisms
-    with spherical harmonics and tensor products to predict molecular properties
-    while maintaining rotational and translational equivariance.
-    
-    The model processes atomic graphs with positions and types to predict
-    energy and forces (when enabled) using multiple transformer-like blocks
-    with equivariant attention mechanisms.
-    
-    Methods are organized into:
-    - Initialization methods
-    - Forward pass helper methods  
-    - Main forward method
+    """E2Former: E(3)-equivariant transformer for atomistic graphs.
+
+    This model operates on batched atomic structures with positions and atom
+    types, constructing radius-based neighborhoods and applying a stack of
+    equivariant transformer blocks. It produces per-atom scalar features (order
+    0) and, when present in the representation, equivariant vector/tensor
+    features (orders > 0). Optionally, a decoupled energy/force head can be
+    used.
+
+    Key configuration:
+    - `irreps_node_embedding`: Spherical tensor representation string (e.g.,
+      "128x0e+128x1e+128x2e"). Must contain a `0e` part for scalar channels.
+    - `basis_type`: Radial basis type: "gaussiansmear", "gaussian", or "bessel".
+    - `edge_embedtype`: Controls edge-degree embedding variant: includes
+      "default", "highorder", "elec", or "eqv2".
+    - `attn_type`/`tp_type`/`ffn_type`: Control attention and tensor-product
+      variants in the transformer blocks.
+
+    Args:
+        irreps_node_embedding: Irreps string or `o3.Irreps` for node features.
+        num_layers: Number of transformer blocks.
+        pbc_max_radius: Maximum cutoff for PBC neighbor search; must equal
+            `max_radius`.
+        max_neighbors: Max neighbors per node used in attention/message passing.
+        max_radius: Spatial cutoff radius for neighborhood construction.
+        basis_type: Radial basis type ("gaussiansmear", "gaussian", or
+            "bessel").
+        number_of_basis: Number of radial basis functions.
+        num_attn_heads: Number of attention heads per block.
+        attn_scalar_head: Scalar head width per attention head.
+        irreps_head: Irreps string for attention/tensor product heads.
+        rescale_degree: Whether to scale features by degree.
+        nonlinear_message: Enable nonlinear message projection.
+        norm_layer: Normalization layer identifier (e.g., "rms_norm_sh").
+        alpha_drop: Dropout rate used in attention weights.
+        proj_drop: Dropout rate on projections.
+        out_drop: Dropout rate on block outputs.
+        drop_path_rate: Stochastic depth rate.
+        atom_type_cnt: Size of the learnable atom-type embedding table used when
+            `token_embedding` is not provided at call time.
+        tp_type: Tensor product variant (e.g., "QK_alpha").
+        attn_type: Attention variant (e.g., "first-order").
+        edge_embedtype: Edge-degree embedding variant.
+        attn_biastype: Strategy for attention bias parameters.
+        ffn_type: Feed-forward network variant inside each block.
+        add_rope: Whether to add rotary positional encodings.
+        time_embed: Expect and use time embeddings in forward pass.
+        sparse_attn: Enable sparse attention within blocks.
+        dynamic_sparse_attn_threthod: Threshold to enable dynamic sparse
+            attention.
+        avg_degree: Estimated average graph degree; used by embeddings.
+        force_head: Reserved argument for external force head (currently unused
+            here; forces produced via blocks or decoupled head).
+        decouple_EF: If True, use a separate block for energy/force outputs.
+        **kwargs: Accepted for forward-compatibility; unused here.
     """
     
     def __init__(
@@ -119,6 +182,10 @@ class E2former(torch.nn.Module):
         decouple_EF=False,
         **kwargs,
     ):
+        """Initialize the E2former module with the provided configuration.
+
+        See the class docstring for a detailed description of all arguments.
+        """
         super().__init__()
         self.tp_type = tp_type
         self.attn_type = attn_type
@@ -284,9 +351,20 @@ class E2former(torch.nn.Module):
         self.apply(self._init_weights)
 
     def reset_parameters(self):
+        """Reset learnable parameters, if implemented by submodules.
+
+        Currently emits a warning because this composite model relies on
+        submodules' own initialization and does not implement a global reset.
+        """
         warnings.warn("Sorry, output model not implement reset parameters")
 
     def _init_weights(self, m):
+        """Initialize module weights for linear and layer norm layers.
+
+        Args:
+            m: A submodule possibly of type `torch.nn.Linear` or
+                `torch.nn.LayerNorm`.
+        """
         if isinstance(m, torch.nn.Linear):
             if m.bias is not None:
                 torch.nn.init.constant_(m.bias, 0)
@@ -296,6 +374,11 @@ class E2former(torch.nn.Module):
 
     @torch.jit.ignore
     def no_weight_decay(self):
+        """Return parameter names exempt from weight decay for optimizers.
+
+        Returns:
+            Set[str]: Names of parameters that should not use weight decay.
+        """
         return no_weight_decay(self)
 
     def forward(
@@ -310,19 +393,45 @@ class E2former(torch.nn.Module):
         **kwargs,
     ) -> torch.Tensor:
         """
-        Forward pass of the E2former class.
-        
+        Forward pass.
+
         Args:
-            batched_data (Dict): Input data containing positions, atomic numbers, etc.
-            token_embedding (torch.Tensor): Input token embeddings, [B, L, D]
-            mixed_attn_bias: Optional attention bias
-            padding_mask (torch.Tensor): Padding mask, [B, L]
-            pbc_expand_batched (Optional[Dict]): PBC expansion data
-            time_embed (Optional[torch.Tensor]): Time embeddings
-            return_node_irreps (bool): Whether to return node irreps
-            
+            batched_data: A dictionary with at least the following keys:
+                - `pos` (torch.Tensor): [B, L, 3] atomic coordinates.
+                - `atom_masks` (torch.BoolTensor): [B, L] True for valid atoms.
+                - `atomic_numbers` (torch.LongTensor): [B, L] atomic numbers.
+                - `pbc` (torch.BoolTensor): [B] indicates PBC per system.
+              Additional keys may be added and consumed by downstream blocks.
+            token_embedding: Optional per-atom embedding of shape [B, L, D]. If
+                provided, it is projected by `unifiedtokentoembedding`. If None,
+                an internal learnable embedding indexed by `atomic_numbers` is
+                used instead.
+            mixed_attn_bias: Optional external attention bias (currently unused
+                in this implementation path, accepted for API compatibility).
+            padding_mask: Optional [B, L] mask; if provided it is ignored here
+                in favor of `atom_masks` from `batched_data`.
+            pbc_expand_batched: Optional dictionary required when `pbc` is True
+                containing:
+                - `outcell_index` (torch.LongTensor): [B, L2] mapping to base
+                  cell indices for expanded atoms.
+                - `expand_pos` (torch.Tensor): [B, L2, 3] expanded positions.
+                - `expand_mask` (torch.BoolTensor): [B, L2] False for valid
+                  expanded atoms, True for padding.
+            time_embed: Optional time embedding tensor broadcastable to nodes;
+                only used if `self.time_embed` is True.
+            return_node_irreps: If True, also returns internal irreps tensors
+                for analysis/diagnostics.
+
         Returns:
-            torch.Tensor: Output tensor with node attributes and vectors
+            - node_attr (torch.Tensor): [B, L, C0] scalar (0e) per-atom features.
+            - node_vec (torch.Tensor): [B, L, 3, C0] equivariant vectors derived
+              from higher-order irreps if present; zeros if not applicable.
+
+        When `return_node_irreps` is True, additionally returns:
+            - node_irreps (torch.Tensor): [B, L, (lmax+1)^2, C0] stacked order
+              components before the final normalization.
+            - node_irreps_his (torch.Tensor): Same shape as `node_irreps`,
+              snapshot from the penultimate block after temporary normalization.
         """
 
         tensortype = self.default_node_embedding.weight.dtype
