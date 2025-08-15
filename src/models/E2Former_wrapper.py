@@ -28,99 +28,142 @@ _AVG_NUM_NODES = 77.81317
 def process_batch_data(data, max_nodes=None):
     """
     Process raw batch data into padded batched format with masks.
+    
+    Converts PyTorch Geometric style flattened data into batched tensors
+    with padding for efficient batch processing.
 
     Args:
         data: Input data containing pos, cell, atomic_numbers, etc.
+            Expected format: PyG Data object with flattened tensors
         max_nodes: Maximum number of nodes for padding. If None, uses maximum in batch.
 
     Returns:
-        dict: Contains batched and padded data with masks
+        Data: Batched data object with padded tensors and masks
+            - pos: [num_graphs, max_nodes, 3] - Atomic positions
+            - cell: [num_graphs, 3, 3] - Unit cell vectors
+            - token_id: [num_graphs, max_nodes] - Atomic numbers
+            - padding_mask: [num_graphs, max_nodes] - True for padded atoms
     """
+    # Early return if already in batched format
     if len(data.pos.shape) == 3:
         return data
-    # otherwise, flatten_N * 3 format
 
-    # Extract batch information
-    batch_idx = data.batch
-    num_graphs = data.ptr.size(0) - 1
+    # =========================================================================
+    # Extract Batch Information
+    # =========================================================================
+    
+    batch_idx = data.batch  # Maps each atom to its graph
+    num_graphs = data.ptr.size(0) - 1  # Number of graphs in batch
 
+    # Determine maximum nodes for padding
     if max_nodes is None:
         max_nodes = max([data.ptr[i + 1] - data.ptr[i] for i in range(num_graphs)])
 
-    # Initialize output tensors
+    # =========================================================================
+    # Initialize Output Tensors with Padding
+    # =========================================================================
+    
+    # Position tensor: padded with zeros
     batched_pos = torch.zeros((num_graphs, max_nodes, 3), device=data.pos.device)
+    
+    # Atomic numbers: padded with zeros (invalid atomic number)
     batched_token_id = torch.zeros(
         (num_graphs, max_nodes), dtype=torch.long, device=data.atomic_numbers.device
     )
+    
+    # Masked token types for potential masked language modeling
     masked_token_type = torch.zeros(
         (num_graphs, max_nodes), dtype=torch.long, device=data.atomic_numbers.device
     )
+    
+    # Padding mask: True indicates padded (invalid) atoms
     padding_mask = torch.ones(
         (num_graphs, max_nodes), dtype=torch.bool, device=data.pos.device
     )
-    # if "is_molecule" in data:
-
-    # else:
+    # =========================================================================
+    # Handle Periodic Boundary Conditions
+    # =========================================================================
+    
     if "pbc" not in data:
-        # pbc = torch.tensor([[1, 1, 1]]).repeat(num_graphs, 1).to(data.pos.device) # default for open catylst
+        # Default PBC settings for surface catalysis (2D periodic)
+        # [1, 1, 0] means periodic in x and y, non-periodic in z
         pbc = (
             torch.tensor([[1, 1, 0]]).repeat(num_graphs, 1).to(data.pos.device)
-        )  # default for open catylst
+        )  # Default for Open Catalyst datasets
     else:
         pbc = data.pbc
 
+    # =========================================================================
+    # Additional Metadata
+    # =========================================================================
+    
+    # Protein flag (for potential biomolecular applications)
     is_protein = torch.zeros(
         (num_graphs, max_nodes, 1), dtype=torch.bool, device=data.pos.device
     )
+    
+    # Count actual atoms per graph
     num_atoms = torch.tensor(
         [data.ptr[i + 1] - data.ptr[i] for i in range(num_graphs)],
         dtype=torch.long,
         device=data.pos.device,
     )
 
-    # Process each graph in the batch
+    # =========================================================================
+    # Process Each Graph in the Batch
+    # =========================================================================
+    
     for i in range(num_graphs):
+        # Get slice indices for current graph
         start_idx = data.ptr[i]
         end_idx = data.ptr[i + 1]
         num_nodes = end_idx - start_idx
 
-        # Fill in positions
+        # Copy atomic positions
         batched_pos[i, :num_nodes] = data.pos[start_idx:end_idx]
 
-        # Fill in cell (assuming one cell per graph)
-
-        # Fill in atomic numbers (token_ids)
+        # Copy atomic numbers (used as token IDs)
         batched_token_id[i, :num_nodes] = data.atomic_numbers[start_idx:end_idx]
+        
+        # Handle masked token types (for masked language modeling tasks)
         if "masked_token_type" in data:
             masked_token_type[i, :num_nodes] = data.masked_token_type[start_idx:end_idx]
         else:
+            # Default: use actual atomic numbers
             masked_token_type[i, :num_nodes] = data.atomic_numbers[start_idx:end_idx]
 
-        # Set mask (False indicates valid entries)
+        # Mark real atoms in mask (False = real atom, True = padding)
         padding_mask[i, :num_nodes] = False
 
+    # =========================================================================
+    # Construct Batched Data Dictionary
+    # =========================================================================
+    
     batched_data = {
-        "pos": batched_pos,  # [num_graphs, max_nodes, 3]
-        "cell": data.cell,  # [num_graphs, 3, 3]
-        "token_id": batched_token_id,  # [num_graphs, max_nodes]
-        "masked_token_type": masked_token_type,
-        "padding_mask": padding_mask,  # [num_graphs, max_nodes]
-        "pbc": pbc,  # [num_graphs, 3]
+        # Core tensors
+        "pos": batched_pos,                    # [num_graphs, max_nodes, 3] - Positions
+        "cell": data.cell,                     # [num_graphs, 3, 3] - Unit cells
+        "token_id": batched_token_id,          # [num_graphs, max_nodes] - Atomic numbers
+        "masked_token_type": masked_token_type,# [num_graphs, max_nodes] - For MLM tasks
+        "padding_mask": padding_mask,          # [num_graphs, max_nodes] - Padding indicators
+        "pbc": pbc,                           # [num_graphs, 3] - PBC flags per dimension
+        
+        # Optional dataset metadata
         "subset_name": None if "subset_name" not in data else data.subset_name,
-        "forces_subset_name": None
-        if "forces_subset_name" not in data
-        else data.forces_subset_name,  # "is_stable_periodic": is_stable_periodic,  # [num_graphs, 1]
-        # "is_molecule": is_molecule,
-        # "is_periodic": is_periodic,
-        "is_protein": is_protein,
+        "forces_subset_name": None if "forces_subset_name" not in data else data.forces_subset_name,
+        
+        # Additional flags
+        "is_protein": is_protein,              # [num_graphs, max_nodes, 1] - Protein flag
+        
+        # Position IDs for potential positional encoding (currently unused)
         "position_ids": torch.arange(max_nodes)
         .unsqueeze(dim=0)
-        .repeat(
-            num_graphs, 1
-        ),  # unused parameter: only for protein, id in sequence for pos cos and sin embed
-        "num_atoms": num_atoms,  # [num_graphs]
-        "node_batch": batch_idx,  # [num_nodes]
-        "graph_padding_mask": padding_mask,  # [num_graphs, max_nodes]
+        .repeat(num_graphs, 1),                # [num_graphs, max_nodes]
+        
+        # Batch information
+        "num_atoms": num_atoms,                # [num_graphs] - Actual atom counts
+        "node_batch": batch_idx,               # [num_nodes] - Graph assignment
+        "graph_padding_mask": padding_mask,    # [num_graphs, max_nodes] - Same as padding_mask
     }
 
     batched_data = Data(**batched_data)
@@ -142,45 +185,79 @@ class E2FormerBackbone(nn.Module):
         self,
         **kwargs,
     ):
+        """
+        Initialize E2Former Backbone model.
+        
+        This wrapper handles data preprocessing and coordinates the E2Former decoder.
+        It processes molecular/crystal structures and predicts energy and forces.
+        
+        Args:
+            **kwargs: Configuration parameters including:
+                - pbc_max_radius: Maximum radius for periodic boundary conditions
+                - max_neighbors: Maximum number of neighbors per atom
+                - backbone_config: E2Former decoder configuration
+                - global_cfg: Global training configuration
+        """
         super().__init__()
         self.kwargs = kwargs
-        # Load configs
+        
+        # =====================================================================
+        # Configuration Loading
+        # =====================================================================
+        
+        # Initialize configuration from kwargs using dataclass validation
         cfg = init_configs(E2FormerConfigs, kwargs)
         self.cfg = cfg
         self.global_cfg = cfg.global_cfg
-        # self.molecular_graph_cfg = cfg.molecular_graph_cfg
-        # self.gnn_cfg = cfg.gnn_cfg
-        # self.reg_cfg = cfg.reg_cfg
 
-        # Training configuration
+        # =====================================================================
+        # Training Configuration
+        # =====================================================================
+        
+        # Whether to predict forces in addition to energy
         self.regress_forces = cfg.global_cfg.regress_forces
 
-        # PSM specific configuration
+        # PSM (Protein Structure Model) specific configuration
         # TODO: Integrate PSM config with EScAIP config system
         self.psm_config = cfg.psm_config
 
-        # Cell expansion for periodic boundary conditions
+        # =====================================================================
+        # Periodic Boundary Conditions (PBC) Setup
+        # =====================================================================
+        
+        # Initialize cell expander for handling periodic systems
+        # This creates periodic images of atoms for proper neighbor calculations
         self.cell_expander = CellExpander(
-            self.kwargs.get("pbc_max_radius",5.),
-            self.kwargs.get("expanded_token_cutoff", 512),  # deprecated
-            self.kwargs.get("pbc_expanded_num_cell_per_direction",4),
-            self.kwargs.get("pbc_max_radius",5.),
+            self.kwargs.get("pbc_max_radius", 5.),  # Cutoff radius for PBC
+            self.kwargs.get("expanded_token_cutoff", 512),  # deprecated parameter
+            self.kwargs.get("pbc_expanded_num_cell_per_direction", 4),  # Cells to expand in each direction
+            self.kwargs.get("pbc_max_radius", 5.),  # Duplicate parameter (should be cleaned up)
         )
 
-        # Get decoder embedding dimension from backbone config
+        # =====================================================================
+        # Embedding Layers
+        # =====================================================================
+        
+        # Extract embedding dimension from E2Former decoder configuration
+        # This ensures compatibility between wrapper and decoder
         self.fea_dim = o3.Irreps(cfg.backbone_config.irreps_node_embedding)[0][0]
         
-        # Token embedding layer matching decoder input dimension
-        self.embedding = nn.Embedding(256, self.fea_dim)
-        self.embedding_charge = nn.Embedding(30, self.fea_dim)
-        self.embedding_multiplicity = nn.Embedding(30, self.fea_dim)
+        # Initialize learnable embeddings for atomic properties
+        self.embedding = nn.Embedding(256, self.fea_dim)  # Atomic number embeddings (up to element 256)
+        self.embedding_charge = nn.Embedding(30, self.fea_dim)  # Charge state embeddings (-10 to +19)
+        self.embedding_multiplicity = nn.Embedding(30, self.fea_dim)  # Spin multiplicity embeddings (0 to 29)
 
-        # Configuration loaded successfully
-
-        self.uniform_center_count = 5
-        self.sph_grid_channel = 8
-        # Direct use without encoder projection
-        # Initialize E2Former decoder
+        # =====================================================================
+        # Additional Configuration Parameters
+        # =====================================================================
+        
+        # Parameters for potential future electron density features
+        self.uniform_center_count = 5  # Number of uniform centers for density
+        self.sph_grid_channel = 8      # Channels for spherical grid representation
+        
+        # =====================================================================
+        # Initialize E2Former Decoder
+        # =====================================================================
         print("e2former use config like follows: \n", cfg.backbone_config)
         self.decoder = E2former(**vars(cfg.backbone_config))
         # Enable high precision matrix multiplication if not using fp16
@@ -262,9 +339,12 @@ class E2FormerBackbone(nn.Module):
                 self.embedding_charge(torch.clip(batched_data["charge"],-10,10)+10) + \
                     self.embedding_multiplicity(torch.clip(batched_data["multiplicity"],0,20))
 
-            # No encoder processing - directly use token embedding for decoder
-
-            # Forward through decoder
+            # =====================================================================
+            # Step 4: Forward Pass Through E2Former Decoder
+            # =====================================================================
+            
+            # Pass preprocessed data directly to E2Former decoder
+            # The decoder handles all E(3)-equivariant transformations
             (
                 node_features,
                 node_vec_features,
@@ -279,7 +359,13 @@ class E2FormerBackbone(nn.Module):
                 return_node_irreps=True,
             )
 
-        # flatten the node features from num batchs times num nodes to num nodes (to pyG style ), note that nodes are padded
+        # =====================================================================
+        # Step 5: Flatten Node Features (PyG Style)
+        # =====================================================================
+        
+        # Convert from batched format [B, N, ...] to flattened format [total_atoms, ...]
+        # This is compatible with PyTorch Geometric (PyG) style processing
+        # Padded nodes are filtered out during flattening
         (
             node_features_flatten,
             node_vec_features_flatten,
@@ -290,18 +376,26 @@ class E2FormerBackbone(nn.Module):
             node_vec_features,
             node_irreps,
             node_irreps_his,
-            ~padding_mask,
+            ~padding_mask,  # Invert mask: True for real atoms
         )
 
+        # =====================================================================
+        # Step 6: Return Results
+        # =====================================================================
+        
+        # Return both batched and flattened representations
         return {
-            "node_irrepsBxN": node_irreps,
-            "node_featuresBxN": node_features,
-            "node_vec_featuresBxN": node_vec_features,
-            "data": batched_data,
-            "node_irreps": node_irreps_flatten,
-            "node_features": node_features_flatten,
-            "node_vec_features": node_vec_features_flatten,
-            "node_irreps_his": node_irreps_his_flatten,
+            # Batched format outputs [B, N, ...]
+            "node_irrepsBxN": node_irreps,              # Full irreducible representations
+            "node_featuresBxN": node_features,          # Scalar features (energy)
+            "node_vec_featuresBxN": node_vec_features,  # Vector features (forces)
+            "data": batched_data,                       # Original input data with updates
+            
+            # Flattened format outputs [total_atoms, ...]
+            "node_irreps": node_irreps_flatten,         # Flattened irreps
+            "node_features": node_features_flatten,      # Flattened scalar features
+            "node_vec_features": node_vec_features_flatten,  # Flattened vector features
+            "node_irreps_his": node_irreps_his_flatten, # Historical irreps (penultimate layer)
         }
 
     def flatten_node_features(
@@ -312,21 +406,45 @@ class E2FormerBackbone(nn.Module):
         node_irreps_his,
         padding_mask,
     ):
+        """
+        Flatten batched node features to PyG-style format.
+        
+        Converts from batched format [B, N, ...] to flattened format [total_atoms, ...]
+        by removing padding and concatenating all real atoms.
+        
+        Args:
+            node_features: Scalar features [B, N, D]
+            node_vec_features: Vector features [B, N, 3, D]
+            node_irreps: Irreducible representations [B, N, (lmax+1)^2, D]
+            node_irreps_his: Historical irreps from penultimate layer
+            padding_mask: Boolean mask, True for real atoms
+        
+        Returns:
+            Tuple of flattened features containing only real atoms
+        """
+        
+        # Reshape to merge batch and node dimensions
         flat_node_irreps = node_irreps.view(
             -1, node_irreps.size(-2), node_irreps.size(-1)
-        )
+        )  # [B*N, (lmax+1)^2, D]
+        
         flat_node_irreps_his = node_irreps_his.view(
             -1, node_irreps_his.size(-2), node_irreps_his.size(-1)
-        )
+        )  # [B*N, (lmax+1)^2, D]
+        
         flat_node_features = node_features.view(-1, node_features.size(-1))  # [B*N, D]
+        
         flat_node_vec_features = node_vec_features.view(
             -1, node_vec_features.size(-2), node_vec_features.size(-1)
-        )  # [B*N, D_vec]
+        )  # [B*N, 3, D]
+        
+        # Flatten the mask
         flat_mask = padding_mask.view(-1)  # [B*N]
-        # Use the mask to filter out padded nodes
-        valid_node_irreps = flat_node_irreps[flat_mask]  # [sum(valid_nodes), D]
-        valid_node_irreps_his = flat_node_irreps_his[flat_mask]  # [sum(valid_nodes), D]
-        valid_node_features = flat_node_features[flat_mask]  # [sum(valid_nodes), D]
+        
+        # Filter out padded nodes using the mask
+        valid_node_irreps = flat_node_irreps[flat_mask]      # [num_real_atoms, (lmax+1)^2, D]
+        valid_node_irreps_his = flat_node_irreps_his[flat_mask]  # [num_real_atoms, (lmax+1)^2, D]
+        valid_node_features = flat_node_features[flat_mask]  # [num_real_atoms, D]
         valid_node_vec_features = flat_node_vec_features[flat_mask]
         return (
             valid_node_features,

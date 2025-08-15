@@ -20,9 +20,6 @@ Usage sketch:
     - Optionally provide `token_embedding` per-atom; otherwise a learnable atom
       type embedding is used.
     - Call the model to obtain per-atom scalar features and equivariant vectors.
-
-Author: E2Former Team
-License: MIT
 """
 
 import math
@@ -434,25 +431,53 @@ class E2former(torch.nn.Module):
               snapshot from the penultimate block after temporary normalization.
         """
 
+        # =====================================================================
+        # Step 1: Data Preparation and Tensor Setup
+        # =====================================================================
+        
+        # Extract data type and device for consistent tensor operations
         tensortype = self.default_node_embedding.weight.dtype
         device = batched_data["pos"].device
+        
+        # Get batch dimensions: B = batch size, L = max atoms per molecule
         B, L = batched_data["pos"].shape[:2]
 
+        # Extract atomic positions and create padding mask
+        # padding_mask: True where atoms are padded (not real)
         node_pos = batched_data["pos"]
         padding_mask = ~batched_data["atom_masks"]
- 
-        # node_pos.requires_grad = True
+        
+        # Set padded positions to a large value (999.0) to avoid interference
+        # This ensures padded atoms don't contribute to neighbor calculations
         node_pos = torch.where(
-            padding_mask.unsqueeze(dim=-1).repeat(1, 1, 3), 999.0, node_pos
+            padding_mask.unsqueeze(dim=-1).repeat(1, 1, 3),  # Expand mask to 3D
+            999.0,  # Sentinel value for padded positions
+            node_pos  # Keep original positions for real atoms
         )
 
+        # =====================================================================
+        # Step 2: Optional Time Embedding Processing
+        # =====================================================================
+        
+        # Handle optional time embedding 
         if (time_embed is not None) and self.time_embed:
             time_embed = time_embed.to(dtype=tensortype)
         else:
             time_embed = None
 
+        # =====================================================================
+        # Step 3: Flatten Batch Data for Efficient Processing
+        # =====================================================================
+        
+        # Create mask for real atoms (inverse of padding mask)
         node_mask = logical_not(padding_mask)
+        
+        # Extract atomic numbers for real atoms only
         atomic_numbers = batched_data["atomic_numbers"].reshape(B, L)[node_mask]
+        
+        # Create pointer array for batch indexing
+        # ptr[i] indicates the start index of batch i in the flattened arrays
+        # ptr[i+1] - ptr[i] gives the number of real atoms in batch i
         ptr = torch.cat(
             [
                 torch.zeros(1, dtype=torch.int32, device=device),
@@ -460,35 +485,80 @@ class E2former(torch.nn.Module):
             ],
             dim=0,
         )
+        
+        # Flatten positions to include only real atoms
+        # f_node_pos shape: [total_real_atoms, 3]
         f_node_pos = node_pos[node_mask]
-        f_N1 = f_node_pos.shape[0]
+        f_N1 = f_node_pos.shape[0]  # Total number of real atoms across all batches
+        
+        # Create batch indices for each real atom
+        # f_batch[i] indicates which batch atom i belongs to
         f_batch = torch.arange(B).reshape(B, 1).repeat(1, L).to(device)[node_mask]
 
-        expand_node_mask = node_mask
-        expand_node_pos = node_pos
+        # =====================================================================
+        # Step 4: Initialize Variables for Periodic Boundary Conditions (PBC)
+        # =====================================================================
+        
+        # Default values for non-PBC (molecular) systems
+        expand_node_mask = node_mask  # Initially same as node_mask
+        expand_node_pos = node_pos    # Initially same as node_pos
+        
+        # Create indices mapping each atom to its original cell
+        # Shape: [B, L] - each element is the atom's index in the original unit cell
         outcell_index = torch.arange(L).unsqueeze(dim=0).repeat(B, 1).to(device)
-        f_exp_node_pos = f_node_pos
-        f_outcell_index = torch.arange(len(f_node_pos)).to(device)
-        mol_type = 0  # torch.any(batched_data["is_molecule"]):
-        L2 = L
+        
+        # Flattened versions for efficient processing
+        f_exp_node_pos = f_node_pos  # Expanded positions (same as original for molecules)
+        f_outcell_index = torch.arange(len(f_node_pos)).to(device)  # Simple indices
+        
+        # System type: 0 for molecules, 1 for periodic systems
+        mol_type = 0  
+        L2 = L  # L2 will be larger than L for PBC due to cell expansion
+        
+        # =====================================================================
+        # Step 5: Handle Periodic Boundary Conditions (PBC)
+        # =====================================================================
         
         if torch.any(batched_data["pbc"]):
+            # Switch to periodic system mode
             mol_type = 1
+            
+            # Update dimensions to account for expanded cells
+            # L2: total atoms including periodic images
             L2 = pbc_expand_batched["outcell_index"].shape[1]
+            
+            # Map each expanded atom back to its original cell atom
             outcell_index = pbc_expand_batched["outcell_index"]
+            
+            # Get expanded positions including periodic images
             expand_node_pos = pbc_expand_batched["expand_pos"].float()
+            
+            # Mark padded expanded positions with sentinel value
             expand_node_pos[
                 pbc_expand_batched["expand_mask"]
-            ] = 999  # set expand node pos padding to 9999
+            ] = 999  # Ensures padded atoms don't affect neighbor calculations
+            
+            # Create mask for real expanded atoms
             expand_node_mask = logical_not(pbc_expand_batched["expand_mask"])
 
+            # Flatten expanded positions for efficient processing
             f_exp_node_pos = expand_node_pos[expand_node_mask]
+            
+            # Map flattened expanded atoms to their original cell atoms
+            # Adding ptr offsets to correctly index into flattened arrays
             f_outcell_index = (outcell_index + ptr[:B, None])[
                 expand_node_mask
-            ]  # e.g. n1*hidden [flatten_outcell_index] -> n2*hidden
+            ]  # Maps expanded atoms -> original atoms in flattened representation
 
+        # Store system type for later use
         batched_data["mol_type"] = mol_type
 
+        # =====================================================================
+        # Step 6: Construct Neighbor Graph
+        # =====================================================================
+        
+        # Build neighbor graph based on distance cutoff
+        # This finds all atom pairs within max_radius distance
         neighbor_info = construct_radius_neighbor(
             node_pos, node_mask,
             expand_node_pos, expand_node_mask,
@@ -498,33 +568,56 @@ class E2former(torch.nn.Module):
         )
         batched_data.update(neighbor_info)
         
-        f_edge_vec = neighbor_info["f_edge_vec"]
-        f_dist = neighbor_info["f_dist"]
-        f_poly_dist = neighbor_info["f_poly_dist"]
-        f_attn_mask = neighbor_info["f_attn_mask"]
-        f_dist_embedding = self.rbf(f_dist)  # flattn_N* topK* self.number_of_basis)
+        # Extract edge information from neighbor graph
+        f_edge_vec = neighbor_info["f_edge_vec"]      # Edge vectors between atoms
+        f_dist = neighbor_info["f_dist"]              # Edge distances
+        f_poly_dist = neighbor_info["f_poly_dist"]    # Polynomial edge distances
+        f_attn_mask = neighbor_info["f_attn_mask"]    # Attention mask for valid edges
+        
+        # Compute radial basis functions for distance encoding
+        # Shape: [num_edges, num_neighbors, num_basis]
+        f_dist_embedding = self.rbf(f_dist)
 
-        # node_mask is used for node_embedding -> f_N*hidden
+        # =====================================================================
+        # Step 7: Atom Embedding
+        # =====================================================================
+        
+        # Create initial atom embeddings
+        # Two pathways: use provided token embeddings or default atomic embeddings
         if token_embedding is not None:
+            # Use pre-computed token embeddings (e.g., from an encoder)
             f_atom_embedding = self.unifiedtokentoembedding(
                 token_embedding[node_mask]
-            )  # [L, B, D] => [B, L, D]
+            )  # Transform and flatten: [B, L, D] => [total_atoms, D]
         else:
+            # Use default learnable embeddings based on atomic numbers
             f_atom_embedding = self.default_node_embedding(atomic_numbers)
 
+        # =====================================================================
+        # Step 8: Compute Spherical Harmonics Powers
+        # =====================================================================
+        
+        # Get coefficients for spherical harmonics computation
         coeffs = E2TensorProductArbitraryOrder.get_coeffs()
         
+        # Pre-compute spherical harmonics powers for positions and edges
+        # These are used for E(3)-equivariant operations throughout the network
         batched_data.update(
             {
                 "f_exp_node_pos": f_exp_node_pos,
                 "f_outcell_index": f_outcell_index,
-                "Y_powers": get_powers(f_node_pos, coeffs, self.lmax),
-                "exp_Y_powers": get_powers(f_exp_node_pos, coeffs, self.lmax),
-                "edge_vec_powers": torch.cat(get_powers(f_edge_vec, coeffs, self.lmax), dim=-2),
+                "Y_powers": get_powers(f_node_pos, coeffs, self.lmax),        # Node SH powers
+                "exp_Y_powers": get_powers(f_exp_node_pos, coeffs, self.lmax), # Expanded node SH powers
+                "edge_vec_powers": torch.cat(get_powers(f_edge_vec, coeffs, self.lmax), dim=-2),  # Edge SH powers
             }
         )
         
-        # Edge degree embedding
+        # =====================================================================
+        # Step 9: Edge Degree Embedding
+        # =====================================================================
+        
+        # Compute edge degree embeddings that incorporate neighbor information
+        # This creates equivariant features based on local atomic environment
         edge_degree_embedding_dense = self.edge_deg_embed_dense(
             f_atom_embedding,
             f_node_pos,
@@ -538,13 +631,24 @@ class E2former(torch.nn.Module):
             time_embed=time_embed,
         )
 
+        # Initialize node irreducible representations (irreps)
+        # Shape: [num_atoms, (lmax+1)^2, hidden_dim]
         f_node_irreps = edge_degree_embedding_dense
+        
+        # Add skip connection for scalar (l=0) features
         f_node_irreps[:, 0, :] = f_node_irreps[:, 0, :] + f_atom_embedding
+        
+        # Initialize tensor for storing intermediate representations
         node_irreps_his = torch.zeros(
             (B, L, (self.lmax + 1) ** 2, self._node_scalar_dim), device=device
         )
 
-        # Forward through transformer blocks
+        # =====================================================================
+        # Step 10: Forward Through Transformer Blocks
+        # =====================================================================
+        
+        # Process through each transformer block sequentially
+        # Each block performs E(3)-equivariant attention and updates node features
         for i, blk in enumerate(self.blocks):
             f_node_irreps, f_dist_embedding = blk(
                 node_pos=f_node_pos,
@@ -556,32 +660,56 @@ class E2former(torch.nn.Module):
                 atomic_numbers=atomic_numbers,
                 attn_mask=f_attn_mask,
                 batched_data=batched_data,
-                add_rope=self.add_rope,
-                sparse_attn=self.sparse_attn,
+                add_rope=self.add_rope,        # Rotary position embeddings
+                sparse_attn=self.sparse_attn,  # Sparse attention optimization
                 batch=f_batch,
             )
+            
+            # Save penultimate layer representations for potential auxiliary tasks
             if i == len(self.blocks) - 2:
                 node_irreps_his[node_mask] = self.norm_tmp(
                     f_node_irreps
-                )  # the part of order 0
+                )
 
+        # =====================================================================
+        # Step 11: Final Normalization and Feature Extraction
+        # =====================================================================
+        
+        # Apply final normalization to node features
         f_node_irreps_final = self.norm_final(f_node_irreps)
+        
+        # Initialize output tensors with zeros (for padded positions)
         node_irreps = torch.zeros(
             (B, L, (self.lmax + 1) ** 2, self._node_scalar_dim), device=device
         )
-        node_irreps[node_mask] = f_node_irreps  # the part of order 0
+        node_irreps[node_mask] = f_node_irreps  # Fill in real atom features
 
-        node_attr = torch.zeros((B, L, self._node_scalar_dim), device=device)
-        node_vec = torch.zeros((B, L, 3, self._node_scalar_dim), device=device)
+        # Initialize scalar (energy) and vector (force) output tensors
+        node_attr = torch.zeros((B, L, self._node_scalar_dim), device=device)  # Energy features
+        node_vec = torch.zeros((B, L, 3, self._node_scalar_dim), device=device)  # Force features
+        
+        # =====================================================================
+        # Step 12: Extract Energy and Force Features
+        # =====================================================================
         
         if not self.decouple_EF:
+            # Coupled energy-force mode: directly extract from irreps
+            # l=0 (scalar) features for energy
             node_attr[node_mask] = f_node_irreps_final[:, 0]
+            
+            # l=1 (vector) features for forces (if available)
             if f_node_irreps_final.shape[1] > 1:
-                node_vec[node_mask] = f_node_irreps_final[:, 1:4]  # the part of order 0
+                node_vec[node_mask] = f_node_irreps_final[:, 1:4]  # Extract x,y,z components
         else:
+            # Decoupled energy-force mode: use separate processing blocks
+            # This can provide better accuracy for force predictions
+            
+            # Process scalar features through dedicated energy block
             node_attr[node_mask] = self.energy_force_block.ffn_s2(f_node_irreps_final)[
                 :, 0
             ]
+            
+            # Process vector features through dedicated force block with attention
             node_vec[node_mask] = self.energy_force_block.ga(
                 node_pos=f_node_pos,
                 node_irreps_input=f_node_irreps_final,
@@ -594,8 +722,13 @@ class E2former(torch.nn.Module):
                 batched_data=batched_data,
                 add_rope=self.add_rope,
                 sparse_attn=self.sparse_attn,
-            )[0][:, 1:4]
+            )[0][:, 1:4]  # Extract vector components
             
+        # =====================================================================
+        # Step 13: Return Results
+        # =====================================================================
+        
+        # Return all intermediate representations if requested (for analysis/debugging)
         if return_node_irreps:
             return node_attr, node_vec, node_irreps, node_irreps_his
 
