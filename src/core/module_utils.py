@@ -594,11 +594,6 @@ class CellExpander:
                 cell, use_local_attention
             )
 
-            # if not use_local_attention:
-            #     all_conflict_mask = self._get_conflict_mask(cell, pos, atoms)
-            #     all_conflict_mask = all_conflict_mask[:, selected_cell_mask, :].reshape(
-            #         batch_size, -1
-            #     )
             cell_tensor = torch.cat(
                 [torch.zeros((1, 3), device=cell_tensor.device), cell_tensor], dim=0
             )
@@ -715,49 +710,6 @@ class CellExpander:
                 expand_pos_compressed[i, : expand_len[i], :] = expand_pos[
                     i, expand_mask[i], :
                 ]
-            # expand_pair_token_type = torch.gather(
-            #     pair_token_type,
-            #     dim=2,
-            #     index=outcell_index.unsqueeze(1)
-            #     .unsqueeze(-1)
-            #     .repeat(1, max_num_atoms, 1, pair_token_type.size()[-1]),
-            # )
-            # expand_node_type_edge = torch.cat(
-            #     [pair_token_type, expand_pair_token_type], dim=2
-            # )
-
-            # if use_local_attention:
-            #     expand_dist_compress = (
-            #         pos.unsqueeze(2) - expand_pos_compressed.unsqueeze(1)
-            #     ).norm(p=2, dim=-1)
-            #     local_attention_weight = self.polynomial(
-            #         expand_dist_compress,
-            #         cutoff=self.pbc_multigraph_cutoff,
-            #     )
-            #     is_periodic = pbc.any(dim=-1)
-            #     local_attention_weight = local_attention_weight.masked_fill(
-            #         ~is_periodic.unsqueeze(-1).unsqueeze(-1), 1.0
-            #     )
-            #     local_attention_weight = local_attention_weight.masked_fill(
-            #         atoms.eq(0).unsqueeze(-1), 1.0
-            #     )
-            #     expand_mask = mask_after_k_persample(
-            #         batch_size, max_expand_len, expand_len
-            #     )
-            #     local_attention_weight = local_attention_weight.masked_fill(
-            #         atoms.eq(0).unsqueeze(-1), 1.0
-            #     )
-            #     local_attention_weight = local_attention_weight.masked_fill(
-            #         expand_mask.unsqueeze(1), 0.0
-            #     )
-            #     pbc_expand_batched = {
-            #         "expand_pos": expand_pos_compressed,
-            #         "outcell_index": outcell_index,
-            #         "expand_mask": expand_mask,
-            #         "local_attention_weight": local_attention_weight,
-            #         "expand_node_type_edge": expand_node_type_edge,
-            #     }
-            # else:
             pbc_expand_batched = {
                 "expand_pos": expand_pos_compressed,
                 "outcell_index": outcell_index,
@@ -767,117 +719,8 @@ class CellExpander:
                 "local_attention_weight": None,
                 # "expand_node_type_edge": expand_node_type_edge,
             }
-            # print(pbc_expand_batched["expand_mask"],
-            #       torch.sum(local_attention_weight==0,dim = 1)!=local_attention_weight.shape[1])
-
-            # expand_pos_no_offset = torch.gather(
-            #     pos, dim=1, index=outcell_index.unsqueeze(-1)
-            # )
-            # offset = expand_pos_compressed - expand_pos_no_offset
-            # init_expand_pos_no_offset = torch.gather(
-            #     init_pos, dim=1, index=outcell_index.unsqueeze(-1)
-            # )
-            # init_expand_pos = init_expand_pos_no_offset + offset
-            # init_expand_pos = init_expand_pos.masked_fill(
-            #     pbc_expand_batched["expand_mask"].unsqueeze(-1),
-            #     0.0,
-            # )
-
-            # pbc_expand_batched["init_expand_pos"] = init_expand_pos
-
-            # # self.check_conflict(pos, atoms, pbc_expand_batched)
-            # print(f"local attention weight {local_attention_weight.numel()} zero:{torch.sum(local_attention_weight==0)}")
-            # # print(torch.sum(local_attention_weight==0,dim = 1)==(local_attention_weight.shape[1]))
-            # print("N1+N2, ",local_attention_weight.shape[2],torch.sum(
-            #     torch.sum(local_attention_weight==0,dim = 1)==local_attention_weight.shape[1])/(local_attention_weight.shape[0]*1.0))
-            # pbc_expand_batched["local_attention_weight"] = None
             return pbc_expand_batched
 
-    # B = 20
-    # N = 15
-    # topK = 20
-    # max_radius = 5.1
-
-    # candidate_cells = [[i, j, k]
-    #             for i in range(-5, 5 + 1)
-    #             for j in range(-5, 5 + 1)
-    #             for k in range(-5, 5 + 1)]
-    # candidate_cells = torch.tensor(candidate_cells)
-    # cell = torch.randn(B,3,3)
-    # node_pos = torch.randn(B,N,3)
-    # padding_mask = torch.randn(B,N)>0
-    # node_mask = ~padding_mask
-    # node_pos[padding_mask] = 9999
-
-
-#     def expand_includeself_clean(
-#     pos,
-#     padding_mask,
-#     is_pbc,
-#     cell,
-#     max_radius,
-#     max_neighbors,
-#     candidate_cells,
-#     use_grad=False
-# ):
-#     with torch.set_grad_enabled(use_grad):
-#         # pos = torch.randn(B,N,3)
-#         pos = pos.float()
-#         cell = cell.float()
-#         B, N = pos.size()[:2]
-#         max_offsets , _ = torch.max(
-#                 torch.ceil(torch.linalg.norm(cell,dim = 2)),dim = 0)
-#         max_offsets = is_pbc[0]*max_offsets
-#         legal_cell = candidate_cells[(candidate_cells.abs()<=max_offsets).all(dim=-1)]
-#         legal_cell = legal_cell.unsqueeze(0).repeat(B, 1, 1).to(dtype=cell.dtype)
-#         num_expanded_cell = legal_cell.shape[1]
-
-
-#         pos[padding_mask] = 9999
-#         offset = torch.bmm(legal_cell, cell)  # B x num_expand_cell x 3
-#         expand_pos = (pos.unsqueeze(1) + offset.unsqueeze(2)).view(B,-1,3)
-
-#         expand_dist = torch.norm(
-#             pos.unsqueeze(2) - expand_pos.unsqueeze(1), p=2, dim=-1
-#         )  # B x T x (num_expand_cell x T)
-
-#         max_neighbors = min(max_neighbors,expand_pos.shape[1])
-#         values, _ = torch.topk(expand_dist, max_neighbors,dim = -1,largest=False)
-
-#         expand_legal_mask = (expand_dist<=(values[:,:,max_neighbors-1].unsqueeze(dim=-1))) & \
-#                         (expand_dist < max_radius)       & \
-#                         (expand_dist > 1e-5)
-
-#         expand_legal_mask = torch.sum(expand_legal_mask, dim=1) > 0
-
-
-#         expand_len = torch.sum(expand_legal_mask, dim=-1)
-#         max_expand_len = torch.max(expand_len)
-#         expand_mask = (torch.arange(0, max_expand_len,device=pos.device)[None].repeat(B,1))>=(expand_len.unsqueeze(dim = -1))
-
-
-#         outcell_index = torch.zeros(
-#             [B, max_expand_len], dtype=torch.long, device=pos.device
-#         )
-#         expand_pos_compressed = torch.zeros(
-#             [B, max_expand_len, 3], dtype=pos.dtype, device=pos.device
-#         )
-#         outcell_all_index = torch.arange(
-#             N, dtype=torch.long, device=pos.device
-#         ).repeat(num_expanded_cell)
-#         for i in range(B):
-#             outcell_index[i, : expand_len[i]] = outcell_all_index[expand_legal_mask[i]]
-#             expand_pos_compressed[i, : expand_len[i], :] = expand_pos[
-#                 i, expand_legal_mask[i], :
-#             ]
-
-#         pbc_expand_batched = {
-#                 "expand_pos": expand_pos_compressed,
-#                 "outcell_index": outcell_index,
-#                 "expand_mask": expand_mask,
-#             }
-#         print(pos.shape,expand_pos_compressed.shape)
-#         return pbc_expand_batched
 
 
 def get_normalization_layer(
@@ -1543,35 +1386,6 @@ class GaussianLayer_Edgetype(nn.Module):
         x_rbf = gaussian(x.float(), mean, std).type_as(self.means.weight)
         return x_rbf.reshape(out_shape+(-1,))
 
-# class CosineCutoff(nn.Module):
-#     def __init__(self, cutoff_lower=0.0, cutoff_upper=5.0):
-#         super(CosineCutoff, self).__init__()
-#         self.cutoff_lower = cutoff_lower
-#         self.cutoff_upper = cutoff_upper
-
-#     def forward(self, distances):
-#         if self.cutoff_lower > 0:
-#             cutoffs = 0.5 * (
-#                 torch.cos(
-#                     math.pi
-#                     * (
-#                         2
-#                         * (distances - self.cutoff_lower)
-#                         / (self.cutoff_upper - self.cutoff_lower)
-#                         + 1.0
-#                     )
-#                 )
-#                 + 1.0
-#             )
-#             # remove contributions below the cutoff radius
-#             cutoffs = cutoffs * (distances < self.cutoff_upper).float()
-#             cutoffs = cutoffs * (distances > self.cutoff_lower).float()
-#             return cutoffs
-#         else:
-#             cutoffs = 0.5 * (torch.cos(distances * math.pi / self.cutoff_upper) + 1.0)
-#             # remove contributions beyond the cutoff radius
-#             cutoffs = cutoffs * (distances < self.cutoff_upper).float()
-#             return cutoffs
 
 
 # in farchem, the max_rep = [rep_a1.max(), rep_a2.max(), rep_a3.max()] is very big for some special case in oc20 dataset
@@ -1879,35 +1693,6 @@ def SmoothSoftmax(input, edge_dis, max_dist=5.0, dim=2, eps=1e-5, batched_data=N
     return softmax
 
 
-# def SmoothSoftmax(input, mask, max_dist=5.0, eps: float = 1e-16):
-#     # Invert distances to ensure smaller distances get higher weights
-#     # No need to mask out the 1000 values, they will naturally get near-zero weights
-#     mask = mask.squeeze(-1)
-#     input = input.masked_fill(mask, 1000)
-#     inverted_input = max_dist - input
-
-#     # Compute the maximum value for numerical stability
-#     max_value = inverted_input.max(dim=-1, keepdim=True).values
-
-#     # Shift the input by subtracting the maximum value to avoid overflow during exponentiation
-#     shifted_input = inverted_input - max_value
-
-#     # Compute e_ij (exponential of the shifted input)
-#     e_ij = torch.exp(shifted_input)
-
-#     # Check for NaN or infinite values
-#     if torch.isnan(e_ij).any() or torch.isinf(e_ij).any():
-#         print("e_ij has nan or inf")
-#         print(e_ij)
-
-#     # Compute Softmax
-#     coeff = (mask.shape[-1] - mask.sum(-1)).unsqueeze(-1)
-#     softmax = e_ij / (torch.sum(e_ij, dim=-1, keepdim=True) + eps) * coeff
-#     softmax = softmax.masked_fill(mask, 1e-6)
-
-#     return softmax
-
-
 class SO3_Linear_e2former(torch.nn.Module):
     def __init__(self, in_features, out_features, lmax, bias=True):
         """
@@ -2065,11 +1850,6 @@ class RadialProfile(nn.Module):
 
             if use_layer_norm:
                 modules.append(nn.LayerNorm(ch_list[i]))
-            # modules.append(nn.ReLU())
-            # modules.append(Activation(o3.Irreps('{}x0e'.format(ch_list[i])),
-            #    acts=[torch.nn.functional.silu]))
-            # modules.append(Activation(o3.Irreps('{}x0e'.format(ch_list[i])),
-            #    acts=[ShiftedSoftplus()]))
             modules.append(torch.nn.SiLU())
 
         self.net = nn.Sequential(*modules)
@@ -2092,18 +1872,6 @@ class SmoothLeakyReLU(torch.nn.Module):
         return "negative_slope={}".format(self.alpha)
 
 
-# class SmoothLeakyReLU(torch.nn.Module):
-#     def __init__(self, negative_slope=0.2):
-#         super().__init__()
-#         self.alpha = 0.3 #negative_slope
-#         self.func = nn.SiLU()
-#     def forward(self, x):
-#         ## x could be any dimension.
-#         return self.func(x)
-#         # return (1-self.alpha) * x * torch.sigmoid(x) + self.alpha * x
-
-#     def extra_repr(self):
-#         return "negative_slope={}".format(self.alpha)
 
 
 class SO3_Linear2Scalar_e2former(torch.nn.Module):
@@ -2285,124 +2053,6 @@ class Irreps2Scalar(torch.nn.Module):
 
     def __repr__(self):
         return f"{self.__class__.__name__}(in_features={self.irreps_in}, out_features={self.out_dim}"
-
-
-# class IrrepsLinear(torch.nn.Module):
-#     def __init__(
-#         self,
-#         irreps_in,
-#         irreps_out,
-#         hidden_dim=None,
-#         bias=True,
-#         act="smoothleakyrelu",
-#         rescale=_RESCALE,
-#     ):
-#         """
-#         1. from irreps to scalar output: [...,irreps] - > [...,out_dim]
-#         2. bias is used for l=0
-#         3. act is used for l=0
-#         4. rescale is default, e.g. irreps is c0*l0+c1*l1+c2*l2+c3*l3, rescale weight is 1/c0**0.5 1/c1**0.5 ...
-#         """
-#         super().__init__()
-#         self.irreps_in = o3.Irreps(irreps_in) if isinstance(irreps_in,str) else irreps_in
-#         self.irreps_out = o3.Irreps(irreps_out) if isinstance(irreps_out,str) else irreps_out
-
-#         self.irreps_in_len = sum([mul*(ir.l*2+1) for mul, ir in self.irreps_in])
-#         self.irreps_out_len = sum([mul*(ir.l*2+1) for mul, ir in self.irreps_out])
-#         if hidden_dim is not None:
-#             self.hidden_dim = hidden_dim
-#         else:
-#             self.hidden_dim = self.irreps_in[0][0]  # l=0 scalar_dim
-#         self.act = act
-#         self.bias = bias
-#         self.rescale = rescale
-
-#         self.vec_proj_list = nn.ModuleList()
-#         # self.irreps_in_len = sum([mul*(ir.l*2+1) for mul, ir in self.irreps_in])
-#         # self.scalar_in_len = sum([mul for mul, ir in self.irreps_in])
-#         self.output_mlp = nn.Sequential(
-#             SmoothLeakyReLU(0.2) if self.act == "smoothleakyrelu" else nn.Identity(),
-#             nn.Linear(self.hidden_dim, self.irreps_out[0][0]),
-#         )
-#         self.weight_list = nn.ParameterList()
-#         for idx in range(len(self.irreps_in)):
-#             l = self.irreps_in[idx][1].l
-#             in_feature = self.irreps_in[idx][0]
-#             if l == 0:
-#                 vec_proj = nn.Linear(in_feature, self.hidden_dim)
-#                 nn.init.xavier_uniform_(vec_proj.weight)
-#                 vec_proj.bias.data.fill_(0)
-#             else:
-#                 vec_proj = nn.Linear(in_feature, 2 * self.hidden_dim, bias=False)
-#                 nn.init.xavier_uniform_(vec_proj.weight)
-
-#                 # weight for l>0
-#                 out_feature = self.irreps_out[idx][0]
-#                 weight = torch.nn.Parameter(
-#                                 torch.randn( out_feature,in_feature)
-#                             )
-#                 bound = 1 / math.sqrt(in_feature) if self.rescale else 1
-#                 torch.nn.init.uniform_(weight, -bound, bound)
-#                 self.weight_list.append(weight)
-
-#             self.vec_proj_list.append(vec_proj)
-
-
-#     def forward(self, input_embedding):
-#         """
-#         from e3nn import o3
-#         irreps_in = o3.Irreps("100x1e+40x2e+10x3e")
-#         irreps_out = o3.Irreps("20x1e+20x2e+20x3e")
-#         irrepslinear = IrrepsLinear(irreps_in, irreps_out)
-#         irreps2scalar = Irreps2Scalar(irreps_in, 128)
-#         node_embed = irreps_in.randn(200,30,5,-1)
-#         out_scalar = irreps2scalar(node_embed)
-#         out_irreps = irrepslinear(node_embed)
-#         """
-
-#         # if input_embedding.shape[-1]!=self.irreps_in_len:
-#         #     raise ValueError("input_embedding should have same length as irreps_in_len")
-
-#         shape = list(input_embedding.shape[:-1])
-#         num = input_embedding.shape[:-1].numel()
-#         input_embedding = input_embedding.reshape(num, -1)
-
-#         start_idx = 0
-#         scalars = self.vec_proj_list[0](input_embedding[..., : self.irreps_in[0][0]])
-#         output_embedding = []
-#         for idx, (mul, ir) in enumerate(self.irreps_in):
-#             if idx == 0:
-#                 start_idx += mul * (2 * ir.l + 1)
-#                 continue
-#             vec_proj = self.vec_proj_list[idx]
-#             vec = (
-#                 input_embedding[:, start_idx : start_idx + mul * (2 * ir.l + 1)]
-#                 .reshape(-1, mul, (2 * ir.l + 1))
-#             )  # [B, D, 2l+1]
-#             vec1, vec2 = torch.split(
-#                 vec_proj(vec.permute(0, 2, 1)), self.hidden_dim, dim=-1
-#             )  # [B, 2l+1, D]
-#             vec_dot = (vec1 * vec2).sum(dim=1)  # [B, 2l+1, D]
-
-#             scalars = scalars + vec_dot # TODO: concat
-
-#             # linear for l>0
-#             weight = self.weight_list[idx-1]
-#             out = torch.matmul(weight,vec).reshape(num,-1) # [B*L, -1]
-#             output_embedding.append(out)
-
-#             start_idx += mul * (2 * ir.l + 1)
-#         try:
-#             scalars = self.output_mlp(scalars)
-#         except:
-#             raise ValueError(f"scalars shape: {scalars.shape}")
-#         output_embedding.insert(0, scalars)
-#         output_embedding = torch.cat(output_embedding, dim=1)
-#         output_embedding = output_embedding.reshape(shape + [self.irreps_out_len])
-#         return output_embedding
-
-#     def __repr__(self):
-#         return f"{self.__class__.__name__}(in_features={self.irreps_in}, out_features={self.irreps_out}"
 
 
 class IrrepsLinear(torch.nn.Module):
