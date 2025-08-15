@@ -7,7 +7,6 @@ This module serves as a compatibility layer for the modularized attention compon
 The implementation has been split into:
 - attention_utils.py: Shared utilities and constants
 - sparse_attention.py: E2AttentionArbOrder_sparse implementation
-- cluster_attention.py: E2AttentionArbOrder_sparse_forcluster implementation
 """
 
 # Import utilities
@@ -21,7 +20,6 @@ from .utils import (
 
 # Import attention mechanisms
 from .sparse import E2AttentionArbOrder_sparse
-from .cluster import E2AttentionArbOrder_sparse_forcluster
 
 # Import tensor product for backward compatibility
 from ...wigner6j.tensor_product import E2TensorProductArbitraryOrder
@@ -36,7 +34,6 @@ __all__ = [
     "irreps_times",
     # Attention mechanisms
     "E2AttentionArbOrder_sparse",
-    "E2AttentionArbOrder_sparse_forcluster",
     # Tensor product
     "E2TensorProductArbitraryOrder",
 ]
