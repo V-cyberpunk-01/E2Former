@@ -6,7 +6,6 @@ This module contains various embedding classes used in the E2Former model:
 - EdgeDegreeEmbeddingNetwork_higherorder: Edge degree embedding for higher-order interactions
 - EdgeDegreeEmbeddingNetwork_higherorder_v3: Version 3 of higher-order edge embedding
 - EdgeDegreeEmbeddingNetwork_eqv2: Equivariant version 2 edge embedding
-- BOOEmbedding: Bond Orientational Order embedding
 - CoefficientMapping: Helper for spherical harmonic coefficient mapping
 """
 
@@ -632,80 +631,5 @@ class EdgeDegreeEmbeddingNetwork_eqv2(torch.nn.Module):
 
         return x_embedding
 
-
-class BOOEmbedding(torch.nn.Module):
-    """Bond Orientational Order embedding module.
-
-    Computes rotationally invariant features from the spherical distribution of bonds
-    around each node using spherical harmonics, following Steinhardt et al. [1983].
-    """
-
-    def __init__(self, max_l=4, hidden_dim=512):
-        """
-        Args:
-            max_l (int): Maximum order of spherical harmonics to use (L in the paper)
-        """
-        super().__init__()
-        self.max_l = max_l
-        self.linear = nn.Linear(max_l + 1, hidden_dim)
-
-    def forward(self, edge_vec, edge_mask):
-        """
-        Args:
-            edge_vec (torch.Tensor): Bond vectors of shape (B, N, K, 3) where:
-                B is batch size
-                N is number of nodes
-                K is max number of neighbors
-            edge_mask (torch.Tensor): Mask for valid edges of shape (B, N, K, 1)
-            batch (torch.Tensor, optional): Batch indices for each node
-
-        Returns:
-            torch.Tensor: BOO features of shape (B, N, max_l+1)
-        """
-        B, N, K, _ = edge_vec.shape
-
-        # Normalize bond vectors
-        edge_vec_norm = torch.norm(edge_vec, dim=-1, keepdim=True)
-        edge_vec_normalized = edge_vec / (edge_vec_norm + 1e-10)
-
-        # Count valid neighbors per node
-        n_neighbors = edge_mask.squeeze(-1).float().sum(dim=-1)  # Shape: (B, N)
-        n_neighbors = n_neighbors.clamp(min=1)  # Avoid division by zero
-
-        # Initialize BOO features
-        boo_features = []
-
-        for l in range(self.max_l + 1):
-            # Compute spherical harmonics Y_l^m for all bonds
-            # Shape: (B, N, K, 2l+1)
-            Y_lm = e3nn.o3.spherical_harmonics(
-                l, edge_vec_normalized, normalize=True, normalization="component"
-            )
-
-            # Apply mask and normalize by number of neighbors
-            # Shape: (B, N, K, 2l+1)
-            Y_lm = Y_lm * edge_mask
-            Y_lm = Y_lm / n_neighbors.view(B, N, 1, 1)
-
-            # Sum over neighbors (K dimension)
-            # Shape: (B, N, 2l+1)
-            q_lm = torch.sum(Y_lm, dim=2)
-
-            # Compute BOO^(l) = sum_m |q_lm|^2
-            # Include normalization factor sqrt(4π/(2l+1))
-            norm_factor = math.sqrt(4 * math.pi / (2 * l + 1))
-            q_lm = q_lm * norm_factor
-            boo_l = torch.sum(
-                torch.abs(q_lm) ** 2, dim=-1, keepdim=True
-            )  # Shape: (B, N, 1)
-
-            boo_features.append(boo_l)
-
-        # Concatenate all BOO features
-        # Final shape: (B, N, max_l+1)
-        boo = torch.cat(boo_features, dim=-1)
-        boo = self.linear(boo)
-
-        return boo
 
 

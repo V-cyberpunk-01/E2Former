@@ -9,7 +9,6 @@ from .embeddings import (
     EdgeDegreeEmbeddingNetwork_higherorder,
     EdgeDegreeEmbeddingNetwork_higherorder_v3,
     EdgeDegreeEmbeddingNetwork_eqv2,
-    BOOEmbedding,
     CoefficientMapping,
 )
 from .blocks import (
@@ -30,7 +29,6 @@ __all__ = [
     "EdgeDegreeEmbeddingNetwork_higherorder",
     "EdgeDegreeEmbeddingNetwork_higherorder_v3",
     "EdgeDegreeEmbeddingNetwork_eqv2",
-    "BOOEmbedding",
     "CoefficientMapping",
     # Blocks
     "TransBlock",
