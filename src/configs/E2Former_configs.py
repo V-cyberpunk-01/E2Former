@@ -1,16 +1,9 @@
 # -*- coding: utf-8 -*-
 # config.py
-
-# Import GaussianFeatureNodeType from PSM model if available
-# If not, replace it with the correct enum/class from your code.
-# from molfm.models.psm.psmmodel import GaussianFeatureNodeType
-# from molfm.models.psm.psmmodel import PSMConfig
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from enum import Enum
 from typing import Any, Dict, Literal, Optional, Type
 
-# from molfm.models.psm import psm_config
-# from molfm.models.graphormer.graphormer_config import GraphormerConfig
 
 
 class VecInitApproach(Enum):
@@ -59,12 +52,6 @@ class ForceHeadType(Enum):
         return self.value
 
 
-# class GaussianFeatureNodeType(Enum):
-#     EXCHANGABLE: str = "EXCHANGABLE"
-#     NON_EXCHANGABLE: str = "NON_EXCHANGABLE"
-
-#     def __str__(self) -> str:
-#         return self.value
 
 
 # follow Escaip, but some parameter is unsed in e2former
@@ -161,10 +148,6 @@ class E2FormerBackboneConfigs:
 
 @dataclass
 class E2FormerConfigs:
-    # E2Former configuration without encoder
     global_cfg: GlobalConfigs
-    # molecular_graph_cfg: MolecularGraphConfigs
-    # gnn_cfg: GraphNeuralNetworksConfigs
-    # reg_cfg: RegularizationConfigs
     psm_config: PSMConfig
     backbone_config: E2FormerBackboneConfigs
