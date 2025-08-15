@@ -14,6 +14,7 @@ E2Former achieves state-of-the-art performance on molecular property prediction 
 - **Modular Design**: Separated components for easy customization and extension
 - **Scalable Architecture**: Designed to efficiently scale with model size and data
 - **GPU Optimized**: Leverages optimized attention kernels for fast inference
+- **Linear-time Node-wise Convolution**: Shifts computation from edges to nodes, reducing complexity from \(O(|\mathcal{E}| L^{3\text{–}6})\) to \(O(|\mathcal{V}|)\), yielding a reported 7×–30× speedup on sparse molecular graphs [paper](https://arxiv.org/pdf/2501.19216)
 
 ## Theoretical Foundation
 
@@ -25,12 +26,28 @@ E2Former's core innovation lies in its use of Wigner 6j symbols for tensor produ
 - **Sparse Computation**: Exploits the sparsity structure of Clebsch-Gordan coefficients for computational efficiency
 - **Physical Constraints**: Naturally enforces angular momentum selection rules and parity conservation
 
+#### Complexity and scaling at a glance
+- **Edge-to-node factorization**: By recoupling with Wigner 6j symbols, edge-level spherical tensor products are factorized into node-local operations. This shifts the scaling from edge count to node count, i.e., from \(O(|\mathcal{E}| L^{3\text{–}6})\) to \(O(|\mathcal{V}|)\), while preserving equivariance (Appendix A in the paper).
+- **Empirical speedups**: The paper reports 7×–30× speedups vs. conventional SO(3) convolutions on sparse molecular graphs, with comparable or better accuracy ([arXiv:2501.19216](https://arxiv.org/pdf/2501.19216)).
+
+#### Equivariance guarantees
+- Uses spherical harmonics \(Y^{(\ell)}\), irreducible representations, and Wigner 3j/6j symbols to couple angular momenta with exact selection rules.
+- Invariance/equivariance properties follow from the orthogonality and symmetry identities of 3j/6j symbols, ensuring strict rotational equivariance without ad-hoc constraints (see Sections A.2–A.4 in the paper).
+
+#### Why 6j (not only 3j)?
+- 3j-based tensor products on edges are expressive but expensive. The 6j-based recoupling moves the heavy tensor products to node-local terms that can be precomputed/aggregated, retaining expressivity with much better scaling ([arXiv:2501.19216](https://arxiv.org/pdf/2501.19216)).
+
 ### Equivariant Attention Mechanism
 The attention mechanism in E2Former maintains E(3) equivariance through:
 - **Spherical Harmonic Projections**: Node features are represented as spherical harmonic tensors
 - **Equivariant Message Passing**: Information aggregation preserves rotational symmetry
 - **Multi-Order Attention**: Different attention orders (0,1,2,all) capture increasingly complex angular dependencies
 - **Tensor Product Attention**: Attention weights are computed using equivariant tensor products rather than standard dot products
+
+### Practical guidance
+- **Choosing attention order**: Start with `first-order` for a strong speed–accuracy tradeoff; use `all-order` for maximal expressivity if memory allows.
+- **Angular cutoff**: Increase `lmax` for systems requiring richer angular correlation; costs grow with angular order even with 6j speedups.
+- **Kernel choice**: Prefer `flash` where fp16 is viable; otherwise `memory_efficient`. Use `math` when you need second-order gradients for forces.
 
 ## Installation
 
@@ -118,6 +135,8 @@ python test_e2former.py
 ```
 
 This will test the model with different batch sizes and verify equivariance properties.
+
+For quick performance sanity checks, compare wall-clock throughput across attention kernels and orders on the same system. You should observe the expected scaling improvements from the 6j-based implementation ([arXiv:2501.19216](https://arxiv.org/pdf/2501.19216)).
 
 ## Molecular Dynamics Simulation
 
@@ -245,6 +264,7 @@ The attention mechanism has been refactored into a modular system for better mai
 - **Memory Management**: Adjust `max_num_nodes_per_batch` for optimal GPU memory usage
 - **FP16 Training**: Use `use_fp16_backbone` or AutoMixedPrecision for improved performance
 - **Attention Types**: The same channels must be used across all irreps orders (e.g., "128x0e+128x1e+128x2e")
+- **Complexity expectations**: Training/inference time should scale primarily with the number of nodes rather than edges due to node-local 6j recoupling.
 
 ## Citation
 
