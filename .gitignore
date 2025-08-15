@@ -123,3 +123,11 @@ local_config.yml
 
 # Claude AI
 CLAUDE.md
+src/__pycache__/__init__.cpython-310.pyc
+src/__pycache__/__init__.cpython-310.pyc
+src/__pycache__/__init__.cpython-312.pyc
+src/__pycache__/E2Former_configs.cpython-310.pyc
+src/__pycache__/E2Former_wrapper.cpython-310.pyc
+src/__pycache__/e2former.cpython-310.pyc
+src/__pycache__/module_utils.cpython-310.pyc
+src/wigner6j/__pycache__/tensor_product.cpython-310.pyc

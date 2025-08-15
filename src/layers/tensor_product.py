@@ -45,7 +45,7 @@ def CODEGEN_MAIN_LEFT_RIGHT(
     self__irreps_out,
     self__instructions,
 ) -> fx.GraphModule:
-    # 初始化输出形状
+    # Build FX graph
     graph = fx.Graph()
 
     # = Function definitions =
@@ -65,7 +65,7 @@ def CODEGEN_MAIN_LEFT_RIGHT(
     # )[0].shape
     del empty
 
-    # # 广播输入张量
+    # Broadcast inputs (legacy approach kept for reference)
     # x1s, x2s = x1s.broadcast_to(output_shape + (-1,-1)), x2s.broadcast_to(
     #     output_shape + (-1,-1)
     # )
@@ -79,7 +79,7 @@ def CODEGEN_MAIN_LEFT_RIGHT(
     # x2s = x2s.reshape(output_shape.numel(), -1, self__irreps_in2[0].mul)
     batch_numel = x1s.shape[0]
 
-    # 提取每个不可约表示的输入
+    # Slice inputs per irrep and reshape to [batch, ir.dim, multiplicity]
     x1_list = [
         x1s[:, i].reshape(batch_numel, mul_ir.ir.dim, mul_ir.mul)
         for i, mul_ir in zip(slices_basis(self__irreps_in1), self__irreps_in1)
@@ -92,13 +92,13 @@ def CODEGEN_MAIN_LEFT_RIGHT(
     outputs = []
     flat_weight_index = 0
 
-    # 仅处理 "uvu" 的情况
+    # Handle only 'uvu' connection mode in this code path
     for idx, ins in enumerate(self__instructions):
         mul_ir_in1 = self__irreps_in1[ins.i_in1]
         mul_ir_in2 = self__irreps_in2[ins.i_in2]
         mul_ir_out = self__irreps_out[ins.i_out]
 
-        # 跳过维度为 0 的情况
+        # Skip zero-dimensional irreps (reference)
         # if mul_ir_in1.dim == 0 or mul_ir_in2.dim == 0 or mul_ir_out.dim == 0:
         #     continue
 
@@ -117,7 +117,7 @@ def CODEGEN_MAIN_LEFT_RIGHT(
             ].reshape(tuple(ins.path_shape))
 
             flat_weight_index += prod(ins.path_shape)
-        # # 取相应的weights
+        # Alternative weight extraction (reference)
         # w = weights[
         #     :, flat_weight_index : flat_weight_index + prod(ins.path_shape)
         # ].reshape((-1,) + tuple(ins.path_shape))
@@ -142,7 +142,7 @@ def CODEGEN_MAIN_LEFT_RIGHT(
             result = torch.einsum("ziu,zju,ijk->zku", x1, x2, w3j)
             # result = torch.sum(xx, dim = -1)
 
-        # # 计算结果
+        # Equivalent einsum form (reference)
         # result = torch.einsum("zuv,ijk,zuvij->zuk", w, w3j, xx)
 
         result = ins.path_weight * result
@@ -164,7 +164,7 @@ def CODEGEN_MAIN_LEFT_RIGHT(
                     mul_ir_in1.ir.l, mul_ir_in2.ir.l, mul_ir_out.ir.l
                 )
 
-    # 汇总输出
+    # Aggregate outputs across instructions producing the same output slice
     outputs = [
         _sum_tensors(
             [
@@ -561,14 +561,14 @@ class Simple_TensorProduct(torch.nn.Module):
         return like.new_zeros(shape)
 
     def _main_left_right(self, x1s, x2s, weights):
-        # 初始化输出形状
+        # Compute output broadcast shape placeholder on CPU
         empty = torch.empty((), device="cpu")
         output_shape = torch.broadcast_tensors(
             empty.expand(x1s.shape[:-1]), empty.expand(x2s.shape[:-1])
         )[0].shape
         del empty
 
-        # 广播输入张量
+        # Broadcast inputs to a common shape
         x1s, x2s = x1s.broadcast_to(output_shape + (-1,)), x2s.broadcast_to(
             output_shape + (-1,)
         )
@@ -577,7 +577,7 @@ class Simple_TensorProduct(torch.nn.Module):
         x2s = x2s.reshape(-1, self.irreps_in2.dim)
         batch_numel = x1s.shape[0]
 
-        # 提取和重塑权重
+        # Extract and reshape weights if present
         if self.weight_numel > 0:
             weights = weights.reshape(-1, self.weight_numel)
 
@@ -594,22 +594,22 @@ class Simple_TensorProduct(torch.nn.Module):
         outputs = []
         flat_weight_index = 0
 
-        # 仅处理 "uvu" 的情况
+        # Handle only 'uvu' connection mode in this function
         for ins in self.instructions:
             mul_ir_in1 = self.irreps_in1[ins.i_in1]
             mul_ir_in2 = self.irreps_in2[ins.i_in2]
             mul_ir_out = self.irreps_out[ins.i_out]
 
-            # 跳过维度为 0 的情况
+            # Skip zero-dimensional irreps (kept as a reference)
             # if mul_ir_in1.dim == 0 or mul_ir_in2.dim == 0 or mul_ir_out.dim == 0:
             #     continue
 
             x1 = x1_list[ins.i_in1]
             x2 = x2_list[ins.i_in2]
 
-            # 计算 x1 和 x2 的外积
+            # Compute outer product between x1 and x2
             xx = torch.einsum("zui,zvj->zuvij", x1, x2)
-            # 获取 Wigner 3j 符号
+            # Get Wigner 3j symbols
             w3j = o3.wigner_3j(mul_ir_in1.ir.l, mul_ir_in2.ir.l, mul_ir_out.ir.l).to(
                 x1s.device
             )
@@ -617,14 +617,14 @@ class Simple_TensorProduct(torch.nn.Module):
             l1l2l3 = (mul_ir_in1.ir.l, mul_ir_in2.ir.l, mul_ir_out.ir.l)
 
             if ins.has_weight:
-                # Extract the weight from the flattened weight tensor
+                # Extract weights from the flattened weight tensor
                 w = weights[
                     :, flat_weight_index : flat_weight_index + prod(ins.path_shape)
                 ].reshape((-1,) + tuple(ins.path_shape))
 
                 flat_weight_index += prod(ins.path_shape)
 
-            # # 取相应的weights
+            # Alternative weight extraction approach (reference)
             # w = weights[
             #     :, flat_weight_index : flat_weight_index + prod(ins.path_shape)
             # ].reshape((-1,) + tuple(ins.path_shape))
@@ -690,15 +690,15 @@ class Simple_TensorProduct(torch.nn.Module):
                     else:
                         result = torch.einsum("zuv,ijk,zuvij->zuk", w, w3j, xx)
                 else:
-                    # not so useful operation because v is summed
+                    # Not very useful operation because v is summed
                     result = torch.einsum("ijk,zuvij->zuk", w3j, xx)
-            # # 计算结果
+            # Equivalent einsum form (reference)
             # result = torch.einsum("zuv,ijk,zuvij->zuk", w, w3j, xx)
 
             result = ins.path_weight * result
             outputs.append(result.reshape(batch_numel, mul_ir_out.dim))
 
-        # 汇总输出
+        # Aggregate outputs across instructions that share the same output slice
         outputs = [
             self._sum_tensors(
                 [
@@ -1163,130 +1163,3 @@ class Simple_TensorProduct_oTchannel(torch.nn.Module, CodeGenMixin):
 
 
 
-
-# def forward(self, x1 : torch.Tensor, x2 : torch.Tensor, weight : torch.Tensor) -> torch.Tensor:
-
-    #     w = weight
-    #     empty = torch.empty((), device = 'cpu')
-    #     getattr_1 = x1.shape
-    #     getitem = getattr_1[slice(None, -1, None)];  getattr_1 = None
-    #     expand = empty.expand(getitem);  getitem = None
-    #     getattr_2 = x2.shape
-    #     getitem_1 = getattr_2[slice(None, -1, None)];  getattr_2 = None
-    #     expand_1 = empty.expand(getitem_1);  empty = getitem_1 = None
-    #     broadcast_tensors = torch.functional.broadcast_tensors(expand, expand_1);  expand = expand_1 = None
-    #     getitem_2 = broadcast_tensors[0];  broadcast_tensors = None
-    #     getattr_3 = getitem_2.shape;  getitem_2 = None
-    #     add = getattr_3 + (-1,)
-    #     broadcast_to = x1.broadcast_to(add);  x1 = add = None
-    #     add_1 = getattr_3 + (-1,)
-    #     broadcast_to_1 = x2.broadcast_to(add_1);  x2 = add_1 = None
-    #     add_2 = getattr_3 + (7168,);  getattr_3 = None
-    #     reshape = broadcast_to.reshape(-1, 4096);  broadcast_to = None
-    #     reshape_1 = broadcast_to_1.reshape(-1, 3);  broadcast_to_1 = None
-    #     getattr_4 = reshape.shape
-    #     getitem_3 = getattr_4[0];  getattr_4 = None
-    #     reshape_2 = w.reshape(-1, 3072);  w = None
-    #     getitem_4 = reshape[(slice(None, None, None), slice(0, 1024, None))]
-    #     reshape_3 = getitem_4.reshape(getitem_3, 1024, 1);  getitem_4 = None
-    #     getitem_5 = reshape[(slice(None, None, None), slice(1024, 4096, None))];  reshape = None
-    #     reshape_4 = getitem_5.reshape(getitem_3, 1024, 3);  getitem_5 = None
-    #     reshape_5 = reshape_1.reshape(getitem_3, 1, 3);  reshape_1 = None
-    #     getitem_6 = reshape_2[(slice(None, None, None), slice(0, 1024, None))]
-    #     reshape_6 = getitem_6.reshape((1024, 1));  getitem_6 = None
-    #     einsum = torch.functional.einsum('edb,eca->ecdab', reshape_5, reshape_3)
-    #     reshape_7 = reshape_3.reshape(getitem_3, 1024);  reshape_3 = None
-    #     einsum_1 = torch.functional.einsum('ca,ab->cab', reshape_7, reshape_6);  reshape_7 = reshape_6 = None
-    #     einsum_2 = torch.functional.einsum('dbc,dca->dba', einsum_1, reshape_5);  einsum_1 = None
-    #     reshape_8 = einsum_2.reshape(getitem_3, 3072);  einsum_2 = None
-    #     getitem_7 = reshape_2[(slice(None, None, None), slice(1024, 2048, None))]
-    #     reshape_9 = getitem_7.reshape((1024, 1));  getitem_7 = None
-    #     mul = reshape_5 * 0.5773502691896258
-    #     einsum_3 = torch.functional.einsum('dca,dba->dcb', mul, reshape_4);  mul = None
-    #     einsum_4 = torch.functional.einsum('cba,ab->ca', einsum_3, reshape_9);  einsum_3 = reshape_9 = None
-    #     reshape_10 = einsum_4.reshape(getitem_3, 1024);  einsum_4 = None
-    #     getitem_8 = reshape_2[(slice(None, None, None), slice(2048, 3072, None))];  reshape_2 = None
-    #     reshape_11 = getitem_8.reshape((1024, 1));  getitem_8 = None
-    #     _w3j_1_1_1 = o3.wigner_3j(1,1,1).to(reshape_11.device)
-    #     einsum_5 = torch.functional.einsum('dba,bc->dbac', reshape_4, reshape_11);  reshape_4 = reshape_11 = None
-    #     mul_5 = reshape_5 * 1.7320508075688772;  reshape_5 = None
-    #     tensordot = torch.functional.tensordot(mul_5, _w3j_1_1_1, dims = ((2,), (1,)), out = None);  mul_5 = _w3j_1_1_1 = None
-    #     einsum_6 = torch.functional.einsum('edab,ecad->ecb', tensordot, einsum_5);  tensordot = einsum_5 = None
-    #     reshape_12 = einsum_6.reshape(getitem_3, 3072);  einsum_6 = getitem_3 = None
-    #     cat = torch.cat([reshape_10, reshape_8, reshape_12], dim = 1);  reshape_10 = reshape_8 = reshape_12 = None
-    #     reshape_13 = cat.reshape(add_2);  cat = add_2 = None
-    #     return reshape_13
-
-
-# @compile_mode("script")
-# class FeedForwardVec2Scalar(torch.nn.Module):
-#     """
-#     Use two (FCTP + Gate)
-#     """
-
-#     def __init__(
-#         self,
-#         irreps_node_input,
-#         irreps_node_output,
-#         proj_drop=0.1,
-#     ):
-#         super().__init__()
-#         self.irreps_node_input = (
-#             o3.Irreps(irreps_node_input)
-#             if isinstance(irreps_node_input, str)
-#             else irreps_node_input
-#         )
-
-#         self.irreps_node_output = (
-#             o3.Irreps(irreps_node_output)
-#             if isinstance(irreps_node_output, str)
-#             else irreps_node_output
-#         )
-
-#         self.scalar_dim = self.irreps_node_input[0][0]  # l=0 scalar_dim
-
-#         self.ir2scalar = Irreps2Scalar(
-#             self.irreps_node_input[1:],
-#             self.scalar_dim,
-#             bias=True,
-#             act="smoothleakyrelu",
-#         )
-
-#         self.slinear_1 = IrrepsLinear(
-#             self.irreps_node_input, self.irreps_node_input, bias=True, act=None
-#         )
-
-#         self.slinear_2 = IrrepsLinear(
-#             self.irreps_node_input, self.irreps_node_output, bias=True, act=None
-#         )
-
-#         self.scalar_linear = nn.Linear(self.scalar_dim, self.scalar_dim * 2)
-#         nn.Sigmoid()
-
-#         if proj_drop != 0.0:
-#             self.proj_drop = EquivariantDropout(
-#                 self.irreps_node_output, drop_prob=proj_drop
-#             )
-
-#     def forward(self, node_input, **kwargs):
-#         """
-#         irreps_in = o3.Irreps("128x0e+32x1e")
-#         func =  FeedForwardNetwork(
-#                 irreps_in,
-#                 irreps_in,
-#                 proj_drop=0.1,
-#             )
-#         out = func(irreps_in.randn(10,20,-1))
-#         """
-#         node_output = self.slinear_1(node_input)
-#         scalar = node_output[..., : self.scalar_dim]
-#         vec = node_output[..., self.scalar_dim :]
-#         scalar1, scalar2 = torch.split(
-#             self.scalar_linear(scalar), self.scalar_dim, dim=-1
-#         )
-#         scalar = scalar1 + self.ir2scalar(vec) * scalar2  # vec 2 scalar
-#         node_output = torch.cat([scalar, vec], dim=-1)
-
-#         node_output = self.slinear_2(node_output)
-
-#         return node_output

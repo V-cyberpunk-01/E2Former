@@ -29,7 +29,7 @@ from ..core.module_utils import (
     SO3_Grid,
     SO3_Linear_e2former,
 )
-from .so2 import _init_edge_rot_mat
+from .blocks.so2 import _init_edge_rot_mat
 
 # Constants
 _AVG_DEGREE = 23.395238876342773  # IS2RE: 100k, max_radius = 5, max_neighbors = 100

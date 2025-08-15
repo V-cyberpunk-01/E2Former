@@ -18,7 +18,7 @@ from .blocks import (
     MessageBlock_eqv2,
     construct_radius_neighbor,
 )
-from .interaction_blocks import (
+from .blocks.interaction_blocks import (
     Body2_interaction,
     Body3_interaction_MACE,
 )
