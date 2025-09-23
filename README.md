@@ -1,8 +1,8 @@
 # E2Former:  An Efficient and Equivariant Transformer with Linear-Scaling Tensor Products
 
 This repository contains the official implementation of E2Former, an equivariant neural network interatomic potential based on efficient attention mechanisms and E(3)-equivariant operations.
-
-> E2Former represents a novel approach to neural network interatomic potentials (NNIPs) that combines the power of attention mechanisms with E(3)-equivariant operations. The model leverages multi-head self-attention within graph neural networks while maintaining rotational equivariance through spherical harmonics and irreducible representations. At its core, E2Former utilizes **Wigner 6j convolution** for efficient and accurate tensor product operations, enabling the model to capture complex geometric interactions while preserving physical symmetries.
+E2Former represents a  approach to neural network interatomic potentials (NNIPs) that combines the power of attention mechanisms with E(3)-equivariant operations. The model leverages multi-head self-attention within graph neural networks while maintaining rotational equivariance through spherical harmonics and irreducible representations. At its core, E2Former utilizes **Wigner 6j convolution** for efficient and accurate tensor product operations, enabling the model to capture complex geometric interactions while preserving physical symmetries.
+<img width="695" height="498" alt="Screenshot 2025-09-22 at 10 36 58 PM" src="https://github.com/user-attachments/assets/83351704-40fa-4ccf-91cb-b96342dd2745" />
 
 E2Former achieves state-of-the-art performance on molecular property prediction tasks by efficiently scaling attention mechanisms while preserving important physical symmetries. The architecture incorporates both invariant and equivariant features through a carefully designed transformer-based architecture that operates on atomic graphs. The model demonstrates superior performance on challenging benchmarks including MD17, MD22, OC20, and SPICE datasets, achieving chemical accuracy for energy and force predictions.
 
@@ -20,6 +20,7 @@ E2Former achieves state-of-the-art performance on molecular property prediction 
 ```bash
 conda install mamba -n base -c conda-forge
 ```
+
 
 ### Step 2: Create and activate the environment
 
