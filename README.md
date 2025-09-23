@@ -2,7 +2,7 @@
 
 This repository contains the official implementation of E2Former, an equivariant neural network interatomic potential based on efficient attention mechanisms and E(3)-equivariant operations.
 
-> E2Former represents a novel approach to neural network interatomic potentials (NNIPs) that combines the power of attention mechanisms with E(3)-equivariant operations. The model leverages multi-head self-attention within graph neural networks while maintaining rotational equivariance through spherical harmonics and irreducible representations. At its core, E2Former utilizes **Wigner 6j convolution** for efficient and accurate tensor product operations, enabling the model to capture complex many-body interactions while preserving physical symmetries.
+> E2Former represents a novel approach to neural network interatomic potentials (NNIPs) that combines the power of attention mechanisms with E(3)-equivariant operations. The model leverages multi-head self-attention within graph neural networks while maintaining rotational equivariance through spherical harmonics and irreducible representations. At its core, E2Former utilizes **Wigner 6j convolution** for efficient and accurate tensor product operations, enabling the model to capture complex geometric interactions while preserving physical symmetries.
 
 E2Former achieves state-of-the-art performance on molecular property prediction tasks by efficiently scaling attention mechanisms while preserving important physical symmetries. The architecture incorporates both invariant and equivariant features through a carefully designed transformer-based architecture that operates on atomic graphs. The model demonstrates superior performance on challenging benchmarks including MD17, MD22, OC20, and SPICE datasets, achieving chemical accuracy for energy and force predictions.
 
@@ -10,44 +10,8 @@ E2Former achieves state-of-the-art performance on molecular property prediction 
 
 - **Wigner 6j Convolution Core**: Leverages Wigner 6j symbols for efficient E(3)-equivariant tensor products ([arXiv:2501.19216](https://arxiv.org/pdf/2501.19216))
 - **E(3)-Equivariant Architecture**: Maintains rotational and translational equivariance through spherical harmonics and tensor products
-- **Efficient Attention Mechanisms**: Multiple attention kernel options (math, memory_efficient, flash) for optimal performance
 - **Modular Design**: Separated components for easy customization and extension
-- **Scalable Architecture**: Designed to efficiently scale with model size and data
-- **GPU Optimized**: Leverages optimized attention kernels for fast inference
-- **Linear-time Node-wise Convolution**: Shifts computation from edges to nodes, reducing complexity from \(O(|\mathcal{E}| L^{3\text{–}6})\) to \(O(|\mathcal{V}|)\), yielding a reported 7×–30× speedup on sparse molecular graphs [paper](https://arxiv.org/pdf/2501.19216)
 
-## Theoretical Foundation
-
-### Wigner 6j Convolution
-E2Former's core innovation lies in its use of Wigner 6j symbols for tensor product operations, as detailed in [arXiv:2501.19216](https://arxiv.org/pdf/2501.19216). This approach provides:
-
-- **Efficient Tensor Products**: The Wigner 6j convolution enables efficient computation of E(3)-equivariant tensor products between spherical harmonic features
-- **Arbitrary Order Support**: Supports tensor products of arbitrary angular momentum orders (l=0,1,2,...) 
-- **Sparse Computation**: Exploits the sparsity structure of Clebsch-Gordan coefficients for computational efficiency
-- **Physical Constraints**: Naturally enforces angular momentum selection rules and parity conservation
-
-#### Complexity and scaling at a glance
-- **Edge-to-node factorization**: By recoupling with Wigner 6j symbols, edge-level spherical tensor products are factorized into node-local operations. This shifts the scaling from edge count to node count, i.e., from \(O(|\mathcal{E}| L^{3\text{–}6})\) to \(O(|\mathcal{V}|)\), while preserving equivariance (Appendix A in the paper).
-- **Empirical speedups**: The paper reports 7×–30× speedups vs. conventional SO(3) convolutions on sparse molecular graphs, with comparable or better accuracy ([arXiv:2501.19216](https://arxiv.org/pdf/2501.19216)).
-
-#### Equivariance guarantees
-- Uses spherical harmonics \(Y^{(\ell)}\), irreducible representations, and Wigner 3j/6j symbols to couple angular momenta with exact selection rules.
-- Invariance/equivariance properties follow from the orthogonality and symmetry identities of 3j/6j symbols, ensuring strict rotational equivariance without ad-hoc constraints (see Sections A.2–A.4 in the paper).
-
-#### Why 6j (not only 3j)?
-- 3j-based tensor products on edges are expressive but expensive. The 6j-based recoupling moves the heavy tensor products to node-local terms that can be precomputed/aggregated, retaining expressivity with much better scaling ([arXiv:2501.19216](https://arxiv.org/pdf/2501.19216)).
-
-### Equivariant Attention Mechanism
-The attention mechanism in E2Former maintains E(3) equivariance through:
-- **Spherical Harmonic Projections**: Node features are represented as spherical harmonic tensors
-- **Equivariant Message Passing**: Information aggregation preserves rotational symmetry
-- **Multi-Order Attention**: Different attention orders (0,1,2,all) capture increasingly complex angular dependencies
-- **Tensor Product Attention**: Attention weights are computed using equivariant tensor products rather than standard dot products
-
-### Practical guidance
-- **Choosing attention order**: Start with `first-order` for a strong speed–accuracy tradeoff; use `all-order` for maximal expressivity if memory allows.
-- **Angular cutoff**: Increase `lmax` for systems requiring richer angular correlation; costs grow with angular order even with 6j speedups.
-- **Kernel choice**: Prefer `flash` where fp16 is viable; otherwise `memory_efficient`. Use `math` when you need second-order gradients for forces.
 
 ## Installation
 
@@ -86,23 +50,6 @@ pre-commit install
 
 ## Model Architecture
 
-E2Former consists of several key components:
-
-1. **E2FormerBackbone**: Main model wrapper that handles data preprocessing and coordinates the encoder-decoder pipeline
-2. **DIT/Transformer Encoder** (optional): Invariant token embedding layers for initial feature extraction
-3. **E2Former Decoder**: Core equivariant transformer with:
-   - **Modular Attention System**: Flexible attention mechanisms with different orders and strategies
-     - Zero-order, First-order, Second-order, and All-order attention types
-     - Multiple alpha computation methods: QK (Query-Key), Dot (Equiformer-style), and memory-efficient variants
-   - **Equivariant Operations**: Maintaining E(3) symmetry through spherical harmonics
-   - **Tensor Product Operations**: Combining different angular momentum channels
-   - **Edge Degree Embeddings**: Radial information processing
-   - **Transformer Blocks**: Equivariant self-attention and feedforward layers
-
-The model supports multiple variants:
-- **E2former**: Standard implementation for molecular systems
-- **E2formerCluster**: Specialized variant with cluster-aware attention mechanisms
-- **Modular Architecture**: Refactored version with separated attention components for easier customization
 
 ## Training
 
