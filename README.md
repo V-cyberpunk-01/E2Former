@@ -1,4 +1,4 @@
-# E2Former:  A Linear-time Efficient and Equivariant Transformer for Scalable Molecular Modeling
+# E2Former:  An Efficient and Equivariant Transformer with Linear-Scaling Tensor Products
 
 This repository contains the official implementation of E2Former, an equivariant neural network interatomic potential based on efficient attention mechanisms and E(3)-equivariant operations.
 
