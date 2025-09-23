@@ -1,8 +1,6 @@
 # E2Former:  An Efficient and Equivariant Transformer with Linear-Scaling Tensor Products
 
-<center> 
-<img width="695" height="498" alt="Screenshot 2025-09-22 at 10 36 58 PM" src="https://github.com/user-attachments/assets/83351704-40fa-4ccf-91cb-b96342dd2745" />
-</center>
+<center> <img width="695" height="498" alt="Screenshot 2025-09-22 at 10 36 58 PM" src="https://github.com/user-attachments/assets/83351704-40fa-4ccf-91cb-b96342dd2745" /> </center>
 
 This repository contains the official implementation of E2Former, an equivariant neural network interatomic potential based on efficient attention mechanisms and E(3)-equivariant operations.
 E2Former represents a  approach to neural network interatomic potentials (NNIPs) that combines the power of attention mechanisms with E(3)-equivariant operations. The model leverages multi-head self-attention within graph neural networks while maintaining rotational equivariance through spherical harmonics and irreducible representations. At its core, E2Former utilizes **Wigner 6j convolution** for efficient and accurate tensor product operations, enabling the model to capture complex geometric interactions while preserving physical symmetries.
