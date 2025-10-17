@@ -197,8 +197,6 @@ def wigner_D(l, alpha, beta, gamma):
 
 
 def _init_edge_rot_mat(edge_distance_vec):
-    print("edge_distance_vec",edge_distance_vec)
-    print("edge_distance_vec shape",edge_distance_vec.shape())
     edge_vec_0 = edge_distance_vec
     edge_vec_0_distance = torch.sqrt(torch.sum(edge_vec_0**2, dim=1))
 
@@ -226,7 +224,7 @@ def _init_edge_rot_mat(edge_distance_vec):
 
     vec_dot = torch.abs(torch.sum(edge_vec_2 * norm_x, dim=1))
     # Check the vectors aren't aligned vec_dot is empty
-    print("vec_dot",vec_dot) 
+
     assert torch.max(vec_dot) < 0.99
 
     norm_z = torch.cross(norm_x, edge_vec_2, dim=1)

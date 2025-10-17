@@ -797,6 +797,23 @@ class Runner(Checkpointable):
 def runner_wrapper(config: dict):
     Runner()(config)
 
+def _launched_by_torchrun() -> bool:
+    """Return True if this process is already spawned by torchrun/elastic agent.
+    Heuristic: presence of standard distributed env vars set by torchrun.
+    """
+    for k in ("LOCAL_RANK", "RANK", "WORLD_SIZE"):
+        if os.environ.get(k) is not None:
+            return True
+    return False
+
+def _default_rdzv_endpoint() -> str:
+    """Build rendezvous endpoint from env; choose a stable default port 29600.
+    Using 29400 is common elsewhere; 29600 reduces port collision risk.
+    """
+    addr = os.environ.get("MASTER_ADDR", "127.0.0.1")
+    port = os.environ.get("MASTER_PORT", "29600")
+    return f"{addr}:{port}"
+
 
 def main(
     args: argparse.Namespace | None = None, override_args: list[str] | None = None
@@ -858,6 +875,47 @@ def main(
         log_file = save_experiment_log(args, jobs, configs)
         logging.info(f"Experiment log saved to: {log_file}")
 
+    if _launched_by_torchrun():
+        logging.info("Detected torchrun/elastic environment; skip elastic_launch and run runner directly.")
+        # Optional guard: fail early with a clear message if LOCAL_RANK is invalid.
+        # try:
+    
+        lr = int(os.environ.get("LOCAL_RANK", "0"))
+        devcount = torch.cuda.device_count()
+        assert 0 <= lr < devcount, f"LOCAL_RANK={lr} out of range (device_count={devcount})"
+        torch.cuda.set_device(lr)
+
+        os.environ.setdefault("NCCL_ASYNC_ERROR_HANDLING", "1")
+        os.environ.setdefault("TORCH_NCCL_BLOCKING_WAIT", "1")
+        if os.environ.get("CLUSTER_IFACE"):
+            os.environ["NCCL_SOCKET_IFNAME"] = os.environ["CLUSTER_IFACE"]
+
+        # 3) LMDB safety
+        if "optim" in config and "num_workers" in config["optim"]:
+            logging.info("Torchrun path: set dataloader num_workers=0 (LMDB/mp safety).")
+            config["optim"]["num_workers"] = 0
+
+        # except Exception as e:
+        #     logging.warning(f"Device guard check skipped/failed: {e}")
+        runner_wrapper(config)
+        return
+    
+    nnodes = getattr(args, "num_nodes", 1)
+    if args.num_gpus > 1 or nnodes > 1:
+        logging.info(f"Running elastic (single launcher) with nnodes={nnodes}, nproc_per_node={args.num_gpus}")
+        if "optim" in config and "num_workers" in config["optim"]:
+            config["optim"]["num_workers"] = 0
+            logging.info("Set dataloader num_workers=0 (LMDB multiprocessing issue).")
+        lc = LaunchConfig(
+            min_nodes=nnodes,
+            max_nodes=nnodes,
+            nproc_per_node=args.num_gpus,
+            rdzv_backend="c10d",
+            rdzv_endpoint=_default_rdzv_endpoint(),
+            max_restarts=0,
+        )
+        elastic_launch(lc, runner_wrapper)(config)
+    
     else:  # Run locally on a single node, n-processes
         if args.num_gpus > 1:
             logging.info(f"Running in local mode with {args.num_gpus} ranks")

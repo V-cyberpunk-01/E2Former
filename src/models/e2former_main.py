@@ -434,7 +434,7 @@ class E2former(torch.nn.Module):
         # =====================================================================
         # Step 1: Data Preparation and Tensor Setup
         # =====================================================================
-        print("Using e2former backbone to train the model")
+        # print("Using e2former backbone to train the model")
         # Extract data type and device for consistent tensor operations
         tensortype = self.default_node_embedding.weight.dtype
         device = batched_data["pos"].device
