@@ -39,10 +39,10 @@ outputs:
 loss_functions:
   - energy:
       fn: mae
-      coefficient: 4
+      coefficient: 20
   - forces:
       fn: l2mae
-      coefficient: 10
+      coefficient: 20
 
 evaluation_metrics:
   metrics:
@@ -117,13 +117,13 @@ model:
 
   # backbone_config:
     decouple_EF: True
-    max_neighbors: 20
+    max_neighbors: 32     # scan {32, 40}; keep radius modest
     irreps_node_embedding: "256x0e+256x1e+256x2e+256x3e"
     num_layers: 12
-    pbc_max_radius: 12
-    max_radius: 12
+    pbc_max_radius: 6     # MPTrj-friendly cutoff 6å
+    max_radius: 6
     basis_type: "gaussiansmear"
-    number_of_basis: 256
+    number_of_basis: 192    # MPTrj-friendly range {128..192}
     num_attn_heads: 32
     attn_scalar_head: 16   # same as the irreps head
     irreps_head: "16x0e+16x1e+16x2e+16x3e"
@@ -154,7 +154,7 @@ optim:
   eval_batch_size:          4
   load_balancing:           atoms
   num_workers:              8
-  lr_initial:               0.0002
+  lr_initial:               0.0004
 
   optimizer:                AdamW
   optimizer_params:

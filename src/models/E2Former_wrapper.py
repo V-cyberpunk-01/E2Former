@@ -22,7 +22,7 @@ from ..utils.nn_utils import init_linear_weights
 from ..utils.base_utils import registry,init_configs
 
 
-_AVG_NUM_NODES = 77.81317
+_AVG_NUM_NODES = 31.19198
 
 
 def process_batch_data(data, max_nodes=None):
