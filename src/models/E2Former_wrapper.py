@@ -16,6 +16,8 @@ from ..layers.blocks import construct_radius_neighbor
 from ..configs.E2Former_configs import E2FormerConfigs
 from ..core.module_utils import CellExpander,GaussianLayer_Edgetype,polynomial
 
+from ..layers.atom_scaling import E2FormerAtomScaling
+
 
 from ..utils.graph_utils import compilable_scatter, unpad_results,RandomRotate
 from ..utils.nn_utils import init_linear_weights
@@ -263,7 +265,7 @@ class E2FormerBackbone(nn.Module):
         self.decoder = E2former(**vars(cfg.backbone_config))
         # Enable high precision matrix multiplication if not using fp16
         if not self.global_cfg.use_fp16_backbone:
-            torch.set_float32_matmul_precision("high")
+            torch.set_float32_matmul_precision("high") 
 
         # Configure logging and compilation
         torch._logging.set_logs(recompiles=True)
@@ -563,7 +565,12 @@ class E2FormerEasyEnergyHead(E2FormerHeadBase):
         # the shape of data.node_batch is [num_nodes]
         # dim size is the number of graphs
         number_of_graphs = data.node_batch.max() + 1
-        energy_output = (
+        num_atoms = data["num_atoms"]
+        if not isinstance(num_atoms, torch.Tensor):
+            num_atoms = torch.as_tensor(num_atoms, device=energy_output.device)
+        denom = num_atoms.to(energy_output.device, energy_output.dtype).clamp_min(1).unsqueeze(-1)  # [G,1]
+
+        energy_output = (                               # energy_output [graph_nums, 1]
             compilable_scatter(
                 src=energy_output,
                 index=data.node_batch,
@@ -571,7 +578,7 @@ class E2FormerEasyEnergyHead(E2FormerHeadBase):
                 dim=0,
                 reduce="sum",
             )
-            / _AVG_NUM_NODES
+            / denom       
         )
         return energy_output
 
@@ -630,6 +637,12 @@ class E2FormerGradEnergyHead(E2FormerHeadBase):
         # the shape of data.node_batch is [num_nodes]
         # dim size is the number of graphs
         number_of_graphs = data.node_batch.max() + 1
+        
+        num_atoms = data["num_atoms"]
+        if not isinstance(num_atoms, torch.Tensor):
+            num_atoms = torch.as_tensor(num_atoms, device=energy_output.device)
+        denom = num_atoms.to(energy_output.device, energy_output.dtype).clamp_min(1).unsqueeze(-1)  # [G,1]
+
         energy_output = (
             compilable_scatter(
                 src=energy_output,
@@ -638,7 +651,7 @@ class E2FormerGradEnergyHead(E2FormerHeadBase):
                 dim=0,
                 reduce="sum",
             )
-            / _AVG_NUM_NODES
+            / denom
         )
         return energy_output
 

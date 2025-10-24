@@ -39,10 +39,10 @@ outputs:
 loss_functions:
   - energy:
       fn: mae
-      coefficient: 20
+      coefficient: 1
   - forces:
       fn: l2mae
-      coefficient: 20
+      coefficient: 0.01
 
 evaluation_metrics:
   metrics:
@@ -143,6 +143,12 @@ model:
     time_embed: False
     force_head: null
 
+    # atom scaling
+    use_atom_scaling: True
+    atom_scaling_max_z: 94
+    atom_scaling_trainable: False
+    atom_scaling_verbose: True
+
   heads:
     forces:
       module: src.models.E2Former_wrapper.E2FormerEasyForceHead
@@ -166,7 +172,7 @@ optim:
     warmup_epochs:          0.1
     lr_min_factor:          0.01
 
-  max_epochs:               30
+  max_epochs:               50
   clip_grad_norm:           50
   ema_decay:                0.999
 

@@ -43,6 +43,7 @@ from ..layers.embeddings import (
     EdgeDegreeEmbeddingNetwork_eqv2,
 )
 from ..layers.blocks import construct_radius_neighbor
+from ..layers.atom_scaling import E2FormerAtomScaling
 from ..core.module_utils import (
     GaussianRadialBasisLayer,
     GaussianSmearing,
@@ -345,6 +346,19 @@ class E2former(torch.nn.Module):
                 nn.Linear(self.scalar_dim, 3 * self.scalar_dim),
             )
 
+        # Initialize AtomScaling if enabled
+        self.use_atom_scaling = use_atom_scaling
+        if self.use_atom_scaling:
+            self.atom_scaling = E2FormerAtomScaling(
+                max_z=atom_scaling_max_z,
+                trainable_scale=atom_scaling_trainable,
+                trainable_shift=atom_scaling_trainable,
+                verbose=atom_scaling_verbose,
+                device="cuda" if torch.cuda.is_available() else "cpu",
+            )
+        else:
+            self.atom_scaling = None
+            
         self.apply(self._init_weights)
 
     def reset_parameters(self):
@@ -447,6 +461,7 @@ class E2former(torch.nn.Module):
         node_pos = batched_data["pos"]
         # padding_mask = ~batched_data["atom_masks"]
         padding_mask = batched_data["padding_mask"]
+        print("padding_mask shape",padding_mask.shape,padding_mask)
         
         # Set padded positions to a large value (999.0) to avoid interference
         # This ensures padded atoms don't contribute to neighbor calculations

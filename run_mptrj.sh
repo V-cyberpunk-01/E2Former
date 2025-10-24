@@ -39,7 +39,7 @@ torchrun \
   --rdzv_endpoint="${MASTER_ADDR}:${MASTER_PORT}" \
   --rdzv_id="${JOB_ID:-oc22_${ts}}" \
   main.py \
-    --config-yml=configs/s2ef/MPTrj/e2former/e2former_67M.yaml \
+    --config-yml=configs/s2ef/MPTrj/e2former/e2former_67M_esen.yaml \
     --mode=train \
     --run-dir=runs \
     --identifier="mptrj_lr${LR:-}bs${BATCH_SIZE:-}nbr${MAX_NEIGHBORS:-}rad${MAX_RADIUS:-}_${ts}" \
